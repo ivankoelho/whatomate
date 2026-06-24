@@ -1054,11 +1054,18 @@ func (a *App) DeleteChatbotFlow(r *fastglue.Request) error {
 	// Delete flow and steps in transaction
 	tx := a.DB.Begin()
 
-	// Delete steps first
-	if err := tx.Where("flow_id = ?", id).Delete(&models.ChatbotFlowStep{}).Error; err != nil {
-		tx.Rollback()
-		a.Log.Error("Failed to delete flow steps", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete flow steps", nil, "")
+	// Delete steps first (table may not exist in v2 deployments — use raw SQL to avoid GORM errors)
+	if err := tx.Exec("DELETE FROM chatbot_flow_steps WHERE flow_id = ?", id).Error; err != nil {
+		// Ignore "table does not exist" errors; the table is absent in v2 which stores graph as JSONB
+		pgErrCode := ""
+		if pqErr, ok := err.(interface{ SQLState() string }); ok {
+			pgErrCode = pqErr.SQLState()
+		}
+		if pgErrCode != "42P01" { // 42P01 = undefined_table
+			tx.Rollback()
+			a.Log.Error("Failed to delete flow steps", "error", err)
+			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete flow steps", nil, "")
+		}
 	}
 
 	// Delete flow
@@ -1437,3 +1444,4 @@ func (a *App) getChatbotStats(orgID uuid.UUID) ChatbotStatsResponse {
 
 	return stats
 }
+
