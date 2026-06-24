@@ -1052,32 +1052,24 @@ func (a *App) DeleteChatbotFlow(r *fastglue.Request) error {
 	var flowForAudit models.ChatbotFlow
 	a.DB.Where("id = ? AND organization_id = ?", id, orgID).First(&flowForAudit)
 
-	// Delete flow and steps in transaction
-	tx := a.DB.Begin()
-
-	// Delete steps first (table may not exist in v2 deployments — use raw SQL to avoid GORM errors)
-	if err := tx.Exec("DELETE FROM chatbot_flow_steps WHERE flow_id = ?", id).Error; err != nil {
-		// Ignore "table does not exist" (42P01) — v2 stores graph as JSONB on chatbot_flows
+	// Delete steps outside transaction — table may not exist in v2 (graph stored as JSONB)
+	// Running inside a tx would poison the tx on error even if we ignore it
+	if err := a.DB.Exec("DELETE FROM chatbot_flow_steps WHERE flow_id = ?", id).Error; err != nil {
 		if !strings.Contains(err.Error(), "42P01") && !strings.Contains(err.Error(), "does not exist") {
-			tx.Rollback()
 			a.Log.Error("Failed to delete flow steps", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete flow steps", nil, "")
 		}
 	}
 
 	// Delete flow
-	result := tx.Where("id = ? AND organization_id = ?", id, orgID).Delete(&models.ChatbotFlow{})
+	result := a.DB.Where("id = ? AND organization_id = ?", id, orgID).Delete(&models.ChatbotFlow{})
 	if result.Error != nil {
-		tx.Rollback()
 		a.Log.Error("Failed to delete flow", "error", result.Error)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete flow", nil, "")
 	}
 	if result.RowsAffected == 0 {
-		tx.Rollback()
 		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Flow not found", nil, "")
 	}
-
-	tx.Commit()
 
 	// Invalidate cache
 	a.InvalidateChatbotFlowsCache(orgID)
