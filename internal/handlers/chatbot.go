@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -1056,12 +1057,8 @@ func (a *App) DeleteChatbotFlow(r *fastglue.Request) error {
 
 	// Delete steps first (table may not exist in v2 deployments — use raw SQL to avoid GORM errors)
 	if err := tx.Exec("DELETE FROM chatbot_flow_steps WHERE flow_id = ?", id).Error; err != nil {
-		// Ignore "table does not exist" errors; the table is absent in v2 which stores graph as JSONB
-		pgErrCode := ""
-		if pqErr, ok := err.(interface{ SQLState() string }); ok {
-			pgErrCode = pqErr.SQLState()
-		}
-		if pgErrCode != "42P01" { // 42P01 = undefined_table
+		// Ignore "table does not exist" (42P01) — v2 stores graph as JSONB on chatbot_flows
+		if !strings.Contains(err.Error(), "42P01") && !strings.Contains(err.Error(), "does not exist") {
 			tx.Rollback()
 			a.Log.Error("Failed to delete flow steps", "error", err)
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete flow steps", nil, "")
