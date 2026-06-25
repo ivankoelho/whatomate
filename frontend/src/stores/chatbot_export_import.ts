@@ -1,33 +1,49 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// INSTRUÇÃO: Adicione as duas funções abaixo dentro do useChatbotStore()
-// em frontend/src/stores/chatbot.ts, junto com as outras actions existentes.
-// ─────────────────────────────────────────────────────────────────────────────
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import { exportChatbotData, importChatbotData } from '@/api/chatbotExportImport'
+import type { ExportRequest, ImportResult } from '@/api/chatbotExportImport'
 
-// ---------- EXPORT ----------
-async function exportData(): Promise<Blob> {
-  const res = await api.post('/api/chatbot/export', {}, { responseType: 'blob' })
-  if (!res.ok) throw new Error('Falha ao exportar dados')
-  return res.blob()
-}
+export const useChatbotExportImportStore = defineStore('chatbotExportImport', () => {
+  const isExporting = ref(false)
+  const isImporting = ref(false)
+  const lastImportResult = ref<ImportResult | null>(null)
+  const error = ref<string | null>(null)
 
-// ---------- IMPORT ----------
-async function importData(jsonText: string): Promise<ImportResult> {
-  const res = await api.post('/api/chatbot/import', jsonText, {
-    headers: { 'Content-Type': 'application/json' },
-  })
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.message ?? 'Falha ao importar dados')
+  async function exportData(payload: ExportRequest = {}): Promise<void> {
+    isExporting.value = true
+    error.value = null
+    try {
+      await exportChatbotData(payload)
+    } catch (err: any) {
+      error.value = err?.response?.data?.message ?? err?.message ?? 'Falha ao exportar'
+      throw err
+    } finally {
+      isExporting.value = false
+    }
   }
-  return res.json()
-}
 
-interface ImportResult {
-  imported_flows:    number
-  imported_keywords: number
-  errors:            string[]
-  message:           string
-}
+  async function importData(file: File): Promise<ImportResult> {
+    isImporting.value = true
+    error.value = null
+    lastImportResult.value = null
+    try {
+      const result = await importChatbotData(file)
+      lastImportResult.value = result
+      return result
+    } catch (err: any) {
+      error.value = err?.response?.data?.message ?? err?.message ?? 'Falha ao importar'
+      throw err
+    } finally {
+      isImporting.value = false
+    }
+  }
 
-// Adicione exportData e importData no return {} do store:
-// return { ...outrasActions, exportData, importData }
+  function reset() {
+    isExporting.value = false
+    isImporting.value = false
+    lastImportResult.value = null
+    error.value = null
+  }
+
+  return { isExporting, isImporting, lastImportResult, error, exportData, importData, reset }
+})
