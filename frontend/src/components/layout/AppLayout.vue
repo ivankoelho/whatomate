@@ -13,7 +13,7 @@ import {
   X
 } from 'lucide-vue-next'
 import { wsService } from '@/services/websocket'
-import { authService } from '@/services/api'
+import { authService, organizationService } from '@/services/api'
 import OrganizationSwitcher from './OrganizationSwitcher.vue'
 import UserMenu from './UserMenu.vue'
 import ActiveCallPanel from '@/components/calling/ActiveCallPanel.vue'
@@ -103,12 +103,10 @@ const orgDisplayName = ref('')
 
 async function loadOrgBranding() {
   try {
-    const res = await fetch('/api/settings', { credentials: 'include' })
-    if (res.ok) {
-      const data = await res.json()
-      orgLogo.value = data.data?.settings?.logo_base64 || ''
-      orgDisplayName.value = data.data?.name || 'Whatomate'
-    }
+    const res = await organizationService.getSettings()
+    const data = res.data?.data
+    orgLogo.value = data?.settings?.logo_base64 || ''
+    orgDisplayName.value = data?.name || 'Whatomate'
   } catch {}
 }
 
