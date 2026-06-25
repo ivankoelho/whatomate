@@ -60,6 +60,7 @@ type OrganizationSettings struct {
 	MetaAppID           string `json:"meta_app_id"`
 	MetaConfigID        string `json:"meta_config_id"`
 	HasMetaAppSecret    bool   `json:"has_meta_app_secret"`
+	LogoBase64          string `json:"logo_base64"`
 }
 
 // GetOrganizationSettings returns the organization settings
@@ -120,6 +121,9 @@ func (a *App) GetOrganizationSettings(r *fastglue.Request) error {
 		if v, ok := org.Settings["meta_app_secret_encrypted"].(string); ok && v != "" {
 			settings.HasMetaAppSecret = true
 		}
+		if v, ok := org.Settings["logo_base64"].(string); ok {
+			settings.LogoBase64 = v
+		}
 	}
 
 	return r.SendEnvelope(map[string]any{
@@ -148,6 +152,7 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 		MetaAppID           *string `json:"meta_app_id"`
 		MetaConfigID        *string `json:"meta_config_id"`
 		MetaAppSecret       *string `json:"meta_app_secret"`
+		LogoBase64          *string `json:"logo_base64"`
 	}
 
 	if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
@@ -172,7 +177,7 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 	oldCalling := callingSettingsSnapshot(org.Settings)
 
 	// Track which tabs received updates so we only audit the relevant ones.
-	generalTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || (req.Name != nil && *req.Name != "") || metaAppCredsTouched
+	generalTouched := req.MaskPhoneNumbers != nil || req.Timezone != nil || req.DateFormat != nil || (req.Name != nil && *req.Name != "") || metaAppCredsTouched || req.LogoBase64 != nil
 	callingTouched := req.CallingEnabled != nil || req.MaxCallDuration != nil || req.TransferTimeoutSecs != nil || req.HoldMusicFile != nil || req.RingbackFile != nil
 
 	// Update settings
@@ -217,6 +222,9 @@ func (a *App) UpdateOrganizationSettings(r *fastglue.Request) error {
 			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update settings", nil, "")
 		}
 		org.Settings["meta_app_secret_encrypted"] = encSecret
+	}
+	if req.LogoBase64 != nil {
+		org.Settings["logo_base64"] = *req.LogoBase64
 	}
 	if req.Name != nil && *req.Name != "" {
 		org.Name = *req.Name
