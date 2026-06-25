@@ -1,178 +1,188 @@
+<template>
+  <div v-if="visible" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-lg font-semibold text-slate-800">
+          {{ mode === 'export' ? 'Exportar' : 'Importar' }} Fluxos e Palavras-chave
+        </h2>
+        <button @click="close" class="text-slate-400 hover:text-slate-600 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- EXPORT MODE -->
+      <div v-if="mode === 'export'">
+        <p class="text-sm text-slate-500 mb-6">
+          Clique em <strong>Baixar JSON</strong> para exportar todos os fluxos e
+          palavras-chave desta organização.
+        </p>
+        <button
+          @click="handleExport"
+          :disabled="loading"
+          class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50
+                 text-white text-sm font-medium rounded-lg transition"
+        >
+          <span v-if="loading">Exportando…</span>
+          <span v-else>⬇ Baixar JSON</span>
+        </button>
+      </div>
+
+      <!-- IMPORT MODE -->
+      <div v-else>
+        <p class="text-sm text-slate-500 mb-4">
+          Selecione o arquivo JSON gerado pelo Whatomate.
+        </p>
+
+        <!-- Drop zone -->
+        <label
+          class="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed
+                 border-slate-300 hover:border-blue-400 rounded-lg cursor-pointer bg-slate-50
+                 transition mb-4"
+          @dragover.prevent
+          @drop.prevent="onDrop"
+        >
+          <svg class="w-8 h-8 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+          </svg>
+          <span class="text-sm text-slate-500">
+            Arraste o arquivo ou <span class="text-blue-600 font-medium">clique aqui</span>
+          </span>
+          <input type="file" accept=".json" class="hidden" @change="onFileChange" />
+        </label>
+
+        <!-- Preview -->
+        <div v-if="preview" class="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4 text-sm">
+          <p class="font-medium text-slate-700 mb-1">📁 {{ selectedFile?.name }}</p>
+          <p class="text-slate-500">
+            🔄 {{ preview.flows?.length ?? 0 }} fluxo(s)&nbsp;·&nbsp;
+            🔑 {{ preview.keywords?.length ?? 0 }} palavra(s)-chave
+          </p>
+          <p v-if="preview.exported_at" class="text-xs text-slate-400 mt-1">
+            Exportado em: {{ formatDate(preview.exported_at) }}
+          </p>
+        </div>
+
+        <!-- Import result -->
+        <div v-if="importResult" class="mb-4 p-3 rounded-lg bg-green-50 border border-green-200">
+          <p class="text-sm font-medium text-green-700">✅ {{ importResult.message }}</p>
+          <ul v-if="importResult.errors?.length" class="mt-2 text-xs text-red-600 list-disc list-inside">
+            <li v-for="e in importResult.errors" :key="e">{{ e }}</li>
+          </ul>
+        </div>
+
+        <button
+          @click="handleImport"
+          :disabled="!preview || loading"
+          class="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 disabled:opacity-50
+                 text-white text-sm font-medium rounded-lg transition"
+        >
+          <span v-if="loading">Importando…</span>
+          <span v-else>⬆ Importar</span>
+        </button>
+      </div>
+
+      <!-- Error -->
+      <p v-if="error" class="mt-3 text-xs text-red-600">⚠ {{ error }}</p>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { exportChatbotData, importChatbotData, type ImportResult } from '@/api/chatbotExportImport'
-import { useToast } from '@/composables/useToast'
+import { ref } from 'vue'
+import { useChatbotStore } from '@/stores/chatbot'
 
-const { toast } = useToast()
+const props = defineProps<{
+  visible: boolean
+  mode: 'export' | 'import'
+}>()
 
-// ── state ──────────────────────────────────────────────────────────────────
-const open = ref(false)
-const tab  = ref<'export' | 'import'>('export')
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'imported'): void
+}>()
+
+const store = useChatbotStore()
 
 const loading      = ref(false)
+const error        = ref('')
+const selectedFile = ref<File | null>(null)
+const preview      = ref<any>(null)
+const importResult = ref<any>(null)
 
-const file         = ref<File | null>(null)
-const filePreview  = ref<{ flows: number; keywords: number } | null>(null)
-const fileError    = ref('')
-const overwrite    = ref(false)
-const importing    = ref(false)
-const importResult = ref<ImportResult | null>(null)
-
-// ── computed ───────────────────────────────────────────────────────────────
-const canImport = computed(() => file.value !== null && filePreview.value !== null && !fileError.value)
-
-// ── helpers ────────────────────────────────────────────────────────────────
-function resetImport() {
-  file.value         = null
-  filePreview.value  = null
-  fileError.value    = ''
+function close() {
+  error.value        = ''
+  preview.value      = null
   importResult.value = null
-  overwrite.value    = false
+  selectedFile.value = null
+  emit('close')
 }
 
 function onFileChange(e: Event) {
-  resetImport()
-  const f = (e.target as HTMLInputElement).files?.[0]
-  if (!f) return
-  if (!f.name.endsWith('.json')) {
-    fileError.value = 'Apenas arquivos .json são aceitos.'
-    return
-  }
-  file.value = f
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) loadFile(file)
+}
+
+function onDrop(e: DragEvent) {
+  const file = e.dataTransfer?.files?.[0]
+  if (file) loadFile(file)
+}
+
+function loadFile(file: File) {
+  selectedFile.value = file
   const reader = new FileReader()
   reader.onload = (ev) => {
     try {
-      const json = JSON.parse(ev.target?.result as string)
-      if (json.version !== '1.0') throw new Error('versão inválida')
-      filePreview.value = {
-        flows:    (json.flows    ?? []).length,
-        keywords: (json.keywords ?? []).length,
-      }
+      preview.value = JSON.parse(ev.target?.result as string)
+      error.value   = ''
     } catch {
-      fileError.value = 'Arquivo inválido ou versão incompatível.'
+      error.value   = 'Arquivo JSON inválido.'
+      preview.value = null
     }
   }
-  reader.readAsText(f)
+  reader.readAsText(file)
 }
 
-// ── actions ────────────────────────────────────────────────────────────────
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString('pt-BR')
+}
+
 async function handleExport() {
   loading.value = true
+  error.value   = ''
   try {
-    await exportChatbotData()
-    toast({ title: 'Exportação concluída', description: 'Arquivo baixado com sucesso.', variant: 'success' })
-    open.value = false
-  } catch {
-    toast({ title: 'Erro ao exportar', description: 'Tente novamente.', variant: 'destructive' })
+    const blob = await store.exportData()
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `whatomate-export-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    close()
+  } catch (e: any) {
+    error.value = e.message ?? 'Erro ao exportar.'
   } finally {
     loading.value = false
   }
 }
 
 async function handleImport() {
-  if (!file.value) return
-  importing.value = true
+  if (!selectedFile.value) return
+  loading.value      = true
+  error.value        = ''
+  importResult.value = null
   try {
-    importResult.value = await importChatbotData(file.value, overwrite.value)
-    toast({
-      title: 'Importação concluída',
-      description: `${importResult.value.imported_flows} fluxo(s) e ${importResult.value.imported_keywords} keyword(s) importado(s).`,
-      variant: 'success',
-    })
-  } catch (err: any) {
-    toast({
-      title: 'Erro ao importar',
-      description: err?.response?.data?.message ?? 'Tente novamente.',
-      variant: 'destructive',
-    })
+    const text         = await selectedFile.value.text()
+    importResult.value = await store.importData(text)
+    emit('imported')
+  } catch (e: any) {
+    error.value = e.message ?? 'Erro ao importar.'
   } finally {
-    importing.value = false
+    loading.value = false
   }
 }
 </script>
-
-<template>
-  <slot name="trigger" :open="() => (open = true)" />
-
-  <Dialog v-model:open="open" @update:open="(v) => { if (!v) resetImport() }">
-    <DialogContent class="sm:max-w-md">
-      <DialogHeader>
-        <DialogTitle>Exportar / Importar</DialogTitle>
-        <DialogDescription>
-          Transfira fluxos e palavras-chave entre ambientes.
-        </DialogDescription>
-      </DialogHeader>
-
-      <Tabs v-model="tab" class="mt-2">
-        <TabsList class="w-full">
-          <TabsTrigger value="export" class="flex-1">Exportar</TabsTrigger>
-          <TabsTrigger value="import" class="flex-1">Importar</TabsTrigger>
-        </TabsList>
-
-        <!-- Export -->
-        <TabsContent value="export" class="space-y-4 pt-4">
-          <p class="text-sm text-muted-foreground">
-            Baixe todos os fluxos e palavras-chave desta organização em um único arquivo
-            <code>.json</code>.
-          </p>
-          <Button class="w-full" :disabled="loading" @click="handleExport">
-            <span v-if="loading">Exportando…</span>
-            <span v-else>⬇ Baixar JSON</span>
-          </Button>
-        </TabsContent>
-
-        <!-- Import -->
-        <TabsContent value="import" class="space-y-4 pt-4">
-          <div>
-            <Label for="import-file">Arquivo de exportação (.json)</Label>
-            <input
-              id="import-file"
-              type="file"
-              accept=".json"
-              class="mt-1 block w-full cursor-pointer text-sm
-                     file:mr-3 file:rounded file:border-0
-                     file:bg-primary file:px-3 file:py-1
-                     file:text-primary-foreground"
-              @change="onFileChange"
-            />
-            <p v-if="fileError" class="mt-1 text-xs text-destructive">{{ fileError }}</p>
-          </div>
-
-          <div
-            v-if="filePreview"
-            class="rounded-md border bg-muted/40 p-3 text-sm space-y-1"
-          >
-            <p>📂 <strong>{{ filePreview.flows }}</strong> fluxo(s) encontrado(s)</p>
-            <p>🔑 <strong>{{ filePreview.keywords }}</strong> palavra(s)-chave encontrada(s)</p>
-          </div>
-
-          <div v-if="filePreview" class="flex items-center gap-2">
-            <Switch id="overwrite" v-model:checked="overwrite" />
-            <Label for="overwrite" class="text-sm">
-              Sobrescrever registros com o mesmo nome
-            </Label>
-          </div>
-
-          <div
-            v-if="importResult"
-            class="rounded-md border border-green-500/30 bg-green-50 p-3 text-sm space-y-1 dark:bg-green-950/20"
-          >
-            <p>✅ <strong>{{ importResult.imported_flows }}</strong> fluxo(s) importado(s)</p>
-            <p>✅ <strong>{{ importResult.imported_keywords }}</strong> keyword(s) importada(s)</p>
-            <p v-if="importResult.skipped_flows.length" class="text-muted-foreground">
-              Ignorados: {{ importResult.skipped_flows.join(', ') }}
-            </p>
-            <p v-if="importResult.skipped_keywords.length" class="text-muted-foreground">
-              Keywords ignoradas: {{ importResult.skipped_keywords.join(', ') }}
-            </p>
-          </div>
-
-          <Button class="w-full" :disabled="!canImport || importing" @click="handleImport">
-            <span v-if="importing">Importando…</span>
-            <span v-else>⬆ Importar</span>
-          </Button>
-        </TabsContent>
-      </Tabs>
-    </DialogContent>
-  </Dialog>
-</template>
