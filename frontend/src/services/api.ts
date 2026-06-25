@@ -742,6 +742,7 @@ export interface Organization {
 export const organizationsService = {
   list: () => api.get<{ organizations: Organization[] }>('/organizations'),
   create: (data: { name: string }) => api.post('/organizations', data),
+  delete: (id: string) => api.delete(`/organizations/${id}`),
   // Members
   addMember: (data: { user_id?: string; email?: string; role_id?: string }) =>
     api.post('/organizations/members', data),
