@@ -30,6 +30,7 @@ const isMobileMenuOpen = ref(false)
 
 // Refresh user data and connect WebSocket on mount
 onMounted(() => {
+  loadOrgBranding()
   if (authStore.isAuthenticated) {
     // Fetch fresh permissions in background (non-destructive — interceptor handles 401)
     authStore.refreshUserData()
@@ -111,9 +112,6 @@ async function loadOrgBranding() {
   } catch {}
 }
 
-onMounted(() => {
-  loadOrgBranding()
-})
 
 const handleLogout = async () => {
   await authStore.logout()
