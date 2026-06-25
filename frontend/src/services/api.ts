@@ -421,6 +421,16 @@ export const chatbotService = {
   resumeTransfer: (id: string) => api.put(`/chatbot/transfers/${id}/resume`),
   assignTransfer: (id: string, agentId: string | null, teamId?: string | null) =>
     api.put(`/chatbot/transfers/${id}/assign`, { agent_id: agentId, team_id: teamId })
+
+  // Export / Import
+  exportChatbot: (data?: { flow_ids?: string[]; keyword_ids?: string[] }) =>
+    api.post('/chatbot/export', data ?? {}, { responseType: 'blob' }),
+  importChatbot: (file: File) =>
+    api.post<{ flows_imported: number; keywords_imported: number; message: string }>(
+      '/chatbot/import',
+      file,
+      { headers: { 'Content-Type': 'application/json' }, transformRequest: [(_: any) => file.text()] },
+    ),
 }
 
 export interface CannedResponseButton {
