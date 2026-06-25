@@ -73,6 +73,17 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     }
   }
 
+  async function deleteOrganization(id: string): Promise<void> {
+    try {
+      await organizationsService.delete(id)
+      organizations.value = organizations.value.filter(o => o.id !== id)
+      if (selectedOrgId.value === id) selectOrganization(null)
+    } catch (err: any) {
+      error.value = err.response?.data?.message || 'Failed to delete organization'
+      throw err
+    }
+  }
+
   return {
     organizations,
     myOrganizations,
@@ -85,6 +96,7 @@ export const useOrganizationsStore = defineStore('organizations', () => {
     fetchOrganizations,
     fetchMyOrganizations,
     selectOrganization,
-    addMember
+    addMember,
+    deleteOrganization
   }
 })
