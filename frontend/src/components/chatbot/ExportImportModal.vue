@@ -22,11 +22,11 @@
         </p>
         <button
           @click="handleExport"
-          :disabled="loading"
+          :disabled="store.isExporting"
           class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50
                  text-white text-sm font-medium rounded-lg transition"
         >
-          <span v-if="loading">Exportando…</span>
+          <span v-if="store.isExporting">Exportando…</span>
           <span v-else>⬇ Baixar JSON</span>
         </button>
       </div>
@@ -70,6 +70,9 @@
         <!-- Import result -->
         <div v-if="importResult" class="mb-4 p-3 rounded-lg bg-green-50 border border-green-200">
           <p class="text-sm font-medium text-green-700">✅ {{ importResult.message }}</p>
+          <p class="text-xs text-slate-500 mt-1">
+            {{ importResult.imported_flows }} fluxo(s) · {{ importResult.imported_keywords }} palavra(s)-chave importado(s)
+          </p>
           <ul v-if="importResult.errors?.length" class="mt-2 text-xs text-red-600 list-disc list-inside">
             <li v-for="e in importResult.errors" :key="e">{{ e }}</li>
           </ul>
@@ -77,24 +80,26 @@
 
         <button
           @click="handleImport"
-          :disabled="!preview || loading"
+          :disabled="!selectedFile || store.isImporting"
           class="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 disabled:opacity-50
                  text-white text-sm font-medium rounded-lg transition"
         >
-          <span v-if="loading">Importando…</span>
+          <span v-if="store.isImporting">Importando…</span>
           <span v-else>⬆ Importar</span>
         </button>
       </div>
 
       <!-- Error -->
-      <p v-if="error" class="mt-3 text-xs text-red-600">⚠ {{ error }}</p>
+      <p v-if="store.error || localError" class="mt-3 text-xs text-red-600">
+        ⚠ {{ store.error || localError }}
+      </p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useChatbotStore } from '@/stores/chatbot'
+import { useChatbotExportImportStore } from '@/stores/chatbot_export_import'
 
 const props = defineProps<{
   visible: boolean
@@ -106,19 +111,20 @@ const emit = defineEmits<{
   (e: 'imported'): void
 }>()
 
-const store = useChatbotStore()
+// ✅ Store correto: chatbot_export_import (não useChatbotStore)
+const store = useChatbotExportImportStore()
 
-const loading      = ref(false)
-const error        = ref('')
+const localError   = ref('')
 const selectedFile = ref<File | null>(null)
 const preview      = ref<any>(null)
 const importResult = ref<any>(null)
 
 function close() {
-  error.value        = ''
+  localError.value   = ''
   preview.value      = null
   importResult.value = null
   selectedFile.value = null
+  store.reset()
   emit('close')
 }
 
@@ -137,11 +143,11 @@ function loadFile(file: File) {
   const reader = new FileReader()
   reader.onload = (ev) => {
     try {
-      preview.value = JSON.parse(ev.target?.result as string)
-      error.value   = ''
+      preview.value    = JSON.parse(ev.target?.result as string)
+      localError.value = ''
     } catch {
-      error.value   = 'Arquivo JSON inválido.'
-      preview.value = null
+      localError.value = 'Arquivo JSON inválido.'
+      preview.value    = null
     }
   }
   reader.readAsText(file)
@@ -151,38 +157,27 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleString('pt-BR')
 }
 
+// ✅ store.exportData() não retorna blob — o download é feito dentro de exportChatbotData()
 async function handleExport() {
-  loading.value = true
-  error.value   = ''
+  localError.value = ''
   try {
-    const blob = await store.exportData()
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href     = url
-    a.download = `whatomate-export-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    await store.exportData({})
     close()
-  } catch (e: any) {
-    error.value = e.message ?? 'Erro ao exportar.'
-  } finally {
-    loading.value = false
+  } catch {
+    // store.error preenchido automaticamente
   }
 }
 
+// ✅ store.importData() recebe File (não string)
 async function handleImport() {
   if (!selectedFile.value) return
-  loading.value      = true
-  error.value        = ''
+  localError.value   = ''
   importResult.value = null
   try {
-    const text         = await selectedFile.value.text()
-    importResult.value = await store.importData(text)
+    importResult.value = await store.importData(selectedFile.value)
     emit('imported')
-  } catch (e: any) {
-    error.value = e.message ?? 'Erro ao importar.'
-  } finally {
-    loading.value = false
+  } catch {
+    // store.error preenchido automaticamente
   }
 }
 </script>
