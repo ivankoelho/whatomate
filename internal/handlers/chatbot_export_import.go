@@ -3,52 +3,32 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shridarpatil/whatomate/internal/audit"
 	"github.com/shridarpatil/whatomate/internal/models"
 	"github.com/valyala/fasthttp"
 	"github.com/zerodha/fastglue"
 )
 
-// ─── Structs de Export/Import ────────────────────────────────────────────────
-
+// chatbotExportPayload é o formato do arquivo JSON exportado.
 type chatbotExportPayload struct {
-	Version    string              `json:"version"`
-	ExportedAt time.Time           `json:"exported_at"`
-	Flows      []chatbotFlowExport `json:"flows"`
-	Keywords   []keywordRuleExport `json:"keywords"`
+	Version    string                `json:"version"`
+	ExportedAt time.Time             `json:"exported_at"`
+	Flows      []models.ChatbotFlow  `json:"flows"`
+	Keywords   []models.KeywordRule  `json:"keywords"`
 }
 
-type chatbotFlowExport struct {
-	Name              string         `json:"name"`
-	Description       string         `json:"description"`
-	TriggerKeywords   []string       `json:"trigger_keywords"`
-	InitialMessage    string         `json:"initial_message"`
-	CompletionMessage string         `json:"completion_message"`
-	OnCompleteAction  string         `json:"on_complete_action"`
-	CompletionConfig  map[string]any `json:"completion_config"`
-	PanelConfig       map[string]any `json:"panel_config"`
-	Graph             map[string]any `json:"graph"`
-	Enabled           bool           `json:"enabled"`
+// exportChatbotRequest define quais IDs exportar (vazio = exporta tudo da org).
+type exportChatbotRequest struct {
+	FlowIDs    []uuid.UUID `json:"flow_ids"`
+	KeywordIDs []uuid.UUID `json:"keyword_ids"`
 }
 
-type keywordRuleExport struct {
-	Name            string              `json:"name"`
-	Keywords        []string            `json:"keywords"`
-	MatchType       models.MatchType    `json:"match_type"`
-	ResponseType    models.ResponseType `json:"response_type"`
-	ResponseContent map[string]any      `json:"response_content"`
-	Priority        int                 `json:"priority"`
-	Enabled         bool                `json:"enabled"`
-}
-
-// ─── EXPORT ───────────────────────────────────────────────────────────────────
-
-// ExportChatbotData exports chatbot flows and/or keyword rules as a portable JSON.
+// ExportChatbotData exporta flows e keyword rules como JSON.
 // POST /api/chatbot/export
-// Body (optional): { "flow_ids": ["uuid", ...], "keyword_ids": ["uuid", ...] }
-// Omitting or sending empty arrays exports ALL items for the organization.
 func (a *App) ExportChatbotData(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
@@ -59,84 +39,57 @@ func (a *App) ExportChatbotData(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 
-	var req struct {
-		FlowIDs    []string `json:"flow_ids"`
-		KeywordIDs []string `json:"keyword_ids"`
+	var req exportChatbotRequest
+	_ = r.Decode(&req, "json") // body opcional
+
+	// Buscar flows
+	var flows []models.ChatbotFlow
+	flowQ := a.DB.Where("organization_id = ?", orgID)
+	if len(req.FlowIDs) > 0 {
+		flowQ = flowQ.Where("id IN ?", req.FlowIDs)
 	}
-	if len(r.RequestCtx.PostBody()) > 0 {
-		if err := json.Unmarshal(r.RequestCtx.PostBody(), &req); err != nil {
-			return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
-		}
+	if err := flowQ.Find(&flows).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch flows", nil, "")
+	}
+
+	// Buscar keywords
+	var keywords []models.KeywordRule
+	kwQ := a.DB.Where("organization_id = ?", orgID)
+	if len(req.KeywordIDs) > 0 {
+		kwQ = kwQ.Where("id IN ?", req.KeywordIDs)
+	}
+	if err := kwQ.Find(&keywords).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch keyword rules", nil, "")
 	}
 
 	payload := chatbotExportPayload{
 		Version:    "1.0",
 		ExportedAt: time.Now().UTC(),
+		Flows:      flows,
+		Keywords:   keywords,
 	}
 
-	// ── Flows ──
-	flowQuery := a.DB.Model(&models.ChatbotFlow{}).Where("organization_id = ?", orgID)
-	if len(req.FlowIDs) > 0 {
-		if parsed := parseExportUUIDs(req.FlowIDs); len(parsed) > 0 {
-			flowQuery = flowQuery.Where("id IN ?", parsed)
-		}
-	}
-	var flows []models.ChatbotFlow
-	if err := flowQuery.Find(&flows).Error; err != nil {
-		a.Log.Error("Export: failed to fetch flows", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to export flows", nil, "")
-	}
-	for _, f := range flows {
-		payload.Flows = append(payload.Flows, chatbotFlowExport{
-			Name:              f.Name,
-			Description:       f.Description,
-			TriggerKeywords:   f.TriggerKeywords,
-			InitialMessage:    f.InitialMessage,
-			CompletionMessage: f.CompletionMessage,
-			OnCompleteAction:  f.OnCompleteAction,
-			CompletionConfig:  map[string]any(f.CompletionConfig),
-			PanelConfig:       map[string]any(f.PanelConfig),
-			Graph:             map[string]any(f.Graph),
-			Enabled:           f.IsEnabled,
-		})
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to serialize export", nil, "")
 	}
 
-	// ── Keywords ──
-	kwQuery := a.DB.Model(&models.KeywordRule{}).Where("organization_id = ?", orgID)
-	if len(req.KeywordIDs) > 0 {
-		if parsed := parseExportUUIDs(req.KeywordIDs); len(parsed) > 0 {
-			kwQuery = kwQuery.Where("id IN ?", parsed)
-		}
-	}
-	var rules []models.KeywordRule
-	if err := kwQuery.Find(&rules).Error; err != nil {
-		a.Log.Error("Export: failed to fetch keyword rules", "error", err)
-		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to export keyword rules", nil, "")
-	}
-	for _, kw := range rules {
-		payload.Keywords = append(payload.Keywords, keywordRuleExport{
-			Name:            kw.Name,
-			Keywords:        kw.Keywords,
-			MatchType:       kw.MatchType,
-			ResponseType:    kw.ResponseType,
-			ResponseContent: map[string]any(kw.ResponseContent),
-			Priority:        kw.Priority,
-			Enabled:         kw.IsEnabled,
-		})
-	}
+	// Audit
+	a.DB.Create(&audit.AuditLog{
+		OrganizationID: orgID,
+		ActorID:        userID,
+		Action:         "export",
+		Resource:       "chatbot",
+		Meta:           fmt.Sprintf(`{"flows":%d,"keywords":%d}`, len(flows), len(keywords)),
+	})
 
-	a.logAudit(orgID, userID, "chatbot_export", orgID,
-		models.AuditActionCreated, nil,
-		map[string]any{"flows": len(payload.Flows), "keywords": len(payload.Keywords)})
-
-	return r.SendEnvelope(payload)
+	r.RequestCtx.Response.Header.Set("Content-Type", "application/json")
+	r.RequestCtx.Response.Header.Set("Content-Disposition", `attachment; filename="whatomate-chatbot-export.json"`)
+	r.RequestCtx.Response.SetBody(raw)
+	return nil
 }
 
-// ─── IMPORT ───────────────────────────────────────────────────────────────────
-
-// ImportChatbotData imports chatbot flows and keyword rules from a JSON payload
-// previously generated by ExportChatbotData. Each record is created with a new
-// UUID to avoid collisions, preserving all configuration faithfully.
+// ImportChatbotData importa flows e keyword rules a partir de um JSON exportado.
 // POST /api/chatbot/import
 func (a *App) ImportChatbotData(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)
@@ -148,114 +101,69 @@ func (a *App) ImportChatbotData(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
 	}
 
-	var payload chatbotExportPayload
-	if err := json.Unmarshal(r.RequestCtx.PostBody(), &payload); err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid import payload", nil, "")
+	body := r.RequestCtx.Request.Body()
+	if len(body) == 0 {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Request body is required", nil, "")
 	}
 
-	if payload.Version != "1.0" {
+	var payload chatbotExportPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid import file format", nil, "")
+	}
+
+	if !strings.HasPrefix(payload.Version, "1.") {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest,
 			fmt.Sprintf("Unsupported export version: %s", payload.Version), nil, "")
 	}
 
-	var importedFlows, importedKeywords int
+	flowsImported := 0
+	for _, flow := range payload.Flows {
+		flow.ID = uuid.New()
+		flow.OrganizationID = orgID
+		flow.CreatedByID = &userID
+		flow.UpdatedByID = &userID
+		flow.CreatedAt = time.Now()
+		flow.UpdatedAt = time.Now()
+		flow.DeletedAt = nil // garantir que não vem soft-deleted
 
-	// ── Import Flows ──
-	for _, item := range payload.Flows {
-		if item.Name == "" {
+		if err := a.DB.Omit("Organization", "InitialTemplate", "CreatedBy", "UpdatedBy").
+			Create(&flow).Error; err != nil {
+			a.Log.Error("Failed to import flow", "name", flow.Name, "error", err)
 			continue
 		}
-		flow := models.ChatbotFlow{
-			BaseModel:         models.BaseModel{ID: uuid.New()},
-			OrganizationID:    orgID,
-			Name:              item.Name,
-			Description:       item.Description,
-			TriggerKeywords:   item.TriggerKeywords,
-			InitialMessage:    item.InitialMessage,
-			CompletionMessage: item.CompletionMessage,
-			OnCompleteAction:  item.OnCompleteAction,
-			CompletionConfig:  models.JSONB(item.CompletionConfig),
-			PanelConfig:       models.JSONB(item.PanelConfig),
-			Graph:             models.JSONB(item.Graph),
-			IsEnabled:         item.Enabled,
-			CreatedByID:       &userID,
-			UpdatedByID:       &userID,
-		}
-		if err := a.DB.Create(&flow).Error; err != nil {
-			a.Log.Error("Import: failed to create flow", "name", item.Name, "error", err)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
-				fmt.Sprintf("Failed to import flow \"%s\"", item.Name), nil, "")
-		}
-		a.logAudit(orgID, userID, "chatbot_flow", flow.ID, models.AuditActionCreated, nil, &flow)
-		importedFlows++
+		flowsImported++
 	}
 
-	// ── Import Keyword Rules ──
-	for _, item := range payload.Keywords {
-		if len(item.Keywords) == 0 {
+	keywordsImported := 0
+	for _, kw := range payload.Keywords {
+		kw.ID = uuid.New()
+		kw.OrganizationID = orgID
+		kw.CreatedByID = &userID
+		kw.UpdatedByID = &userID
+		kw.CreatedAt = time.Now()
+		kw.UpdatedAt = time.Now()
+		kw.DeletedAt = nil
+
+		if err := a.DB.Omit("Organization", "CreatedBy", "UpdatedBy").
+			Create(&kw).Error; err != nil {
+			a.Log.Error("Failed to import keyword rule", "name", kw.Name, "error", err)
 			continue
 		}
-		name := item.Name
-		if name == "" {
-			name = item.Keywords[0]
-		}
-		matchType := item.MatchType
-		if matchType == "" {
-			matchType = models.MatchTypeContains
-		}
-		respType := item.ResponseType
-		if respType == "" {
-			respType = models.ResponseTypeText
-		}
-		rule := models.KeywordRule{
-			BaseModel:       models.BaseModel{ID: uuid.New()},
-			OrganizationID:  orgID,
-			Name:            name,
-			Keywords:        item.Keywords,
-			MatchType:       matchType,
-			ResponseType:    respType,
-			ResponseContent: models.JSONB(item.ResponseContent),
-			Priority:        item.Priority,
-			IsEnabled:       item.Enabled,
-			CreatedByID:     &userID,
-			UpdatedByID:     &userID,
-		}
-		if err := a.DB.Create(&rule).Error; err != nil {
-			a.Log.Error("Import: failed to create keyword rule", "name", name, "error", err)
-			return r.SendErrorEnvelope(fasthttp.StatusInternalServerError,
-				fmt.Sprintf("Failed to import keyword \"%s\"", name), nil, "")
-		}
-		a.logAudit(orgID, userID, "keyword_rule", rule.ID, models.AuditActionCreated, nil, &rule)
-		importedKeywords++
+		keywordsImported++
 	}
 
-	if importedFlows > 0 {
-		a.InvalidateChatbotFlowsCache(orgID)
-	}
-	if importedKeywords > 0 {
-		a.InvalidateKeywordRulesCache(orgID)
-	}
-
-	a.logAudit(orgID, userID, "chatbot_import", orgID,
-		models.AuditActionCreated, nil,
-		map[string]any{"flows": importedFlows, "keywords": importedKeywords})
+	// Audit
+	a.DB.Create(&audit.AuditLog{
+		OrganizationID: orgID,
+		ActorID:        userID,
+		Action:         "import",
+		Resource:       "chatbot",
+		Meta:           fmt.Sprintf(`{"flows_imported":%d,"keywords_imported":%d}`, flowsImported, keywordsImported),
+	})
 
 	return r.SendEnvelope(map[string]any{
-		"message":           "Import completed successfully",
-		"imported_flows":    importedFlows,
-		"imported_keywords": importedKeywords,
+		"flows_imported":    flowsImported,
+		"keywords_imported": keywordsImported,
+		"message":           fmt.Sprintf("Imported %d flow(s) and %d keyword rule(s)", flowsImported, keywordsImported),
 	})
-}
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-// parseExportUUIDs converts a []string to []uuid.UUID, silently skipping invalid entries.
-func parseExportUUIDs(raw []string) []uuid.UUID {
-	out := make([]uuid.UUID, 0, len(raw))
-	for _, s := range raw {
-		if id, err := uuid.Parse(s); err == nil {
-			out = append(out, id)
-		}
-	}
-	return out
 }
