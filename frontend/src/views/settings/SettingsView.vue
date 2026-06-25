@@ -36,6 +36,7 @@ const isLoading = ref(true)
 // General Settings
 const generalSettings = ref({
   organization_name: 'My Organization',
+  logo_base64: '' as string,
   default_timezone: 'UTC',
   date_format: 'YYYY-MM-DD',
   mask_phone_numbers: false,
@@ -93,6 +94,7 @@ onMounted(async () => {
     if (orgData) {
       generalSettings.value = {
         organization_name: orgData.name || 'My Organization',
+        logo_base64: orgData.settings?.logo_base64 || '',
         default_timezone: orgData.settings?.timezone || 'UTC',
         date_format: orgData.settings?.date_format || 'YYYY-MM-DD',
         mask_phone_numbers: orgData.settings?.mask_phone_numbers || false,
@@ -126,6 +128,30 @@ onMounted(async () => {
   }
 })
 
+
+// Logo upload handler
+async function handleLogoUpload(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  if (!['image/png', 'image/svg+xml'].includes(file.type)) {
+    toast.error(t('settings.logoInvalidType'))
+    return
+  }
+  if (file.size > 500 * 1024) {
+    toast.error(t('settings.logoTooLarge'))
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    generalSettings.value.logo_base64 = e.target?.result as string
+  }
+  reader.readAsDataURL(file)
+}
+
+function removeLogo() {
+  generalSettings.value.logo_base64 = ''
+}
+
 async function saveGeneralSettings() {
   isSubmitting.value = true
   try {
@@ -133,7 +159,8 @@ async function saveGeneralSettings() {
       name: generalSettings.value.organization_name,
       timezone: generalSettings.value.default_timezone,
       date_format: generalSettings.value.date_format,
-      mask_phone_numbers: generalSettings.value.mask_phone_numbers
+      mask_phone_numbers: generalSettings.value.mask_phone_numbers,
+      logo_base64: generalSettings.value.logo_base64
     }
     if (canWriteAccounts.value) {
       payload.meta_app_id = generalSettings.value.meta_app_id
@@ -277,6 +304,32 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     v-model="generalSettings.organization_name"
                     :placeholder="$t('settings.organizationPlaceholder')"
                   />
+                </div>
+                <!-- Logo Upload -->
+                <div class="space-y-2">
+                  <Label class="text-white/70 light:text-gray-700">{{ $t('settings.organizationLogo') }}</Label>
+                  <div class="flex items-center gap-4">
+                    <!-- Preview -->
+                    <div class="h-10 w-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0"
+                      :class="generalSettings.logo_base64 ? 'bg-transparent border border-white/[0.1] light:border-gray-200' : 'bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-500/20'"
+                    >
+                      <img v-if="generalSettings.logo_base64" :src="generalSettings.logo_base64" class="h-full w-full object-contain" />
+                      <MessageSquare v-else class="h-5 w-5 text-white" />
+                    </div>
+                    <div class="flex gap-2">
+                      <label class="cursor-pointer">
+                        <input type="file" accept=".png,.svg,image/png,image/svg+xml" class="hidden" @change="handleLogoUpload" />
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-white/[0.04] border border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50 transition-colors cursor-pointer">
+                          <Upload class="h-3.5 w-3.5" />
+                          {{ $t('settings.uploadLogo') }}
+                        </span>
+                      </label>
+                      <Button v-if="generalSettings.logo_base64" variant="ghost" size="sm" class="text-white/40 hover:text-white/70 light:text-gray-400 light:hover:text-gray-600" @click="removeLogo">
+                        <XIcon class="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.logoHint') }}</p>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                   <div class="space-y-2">
