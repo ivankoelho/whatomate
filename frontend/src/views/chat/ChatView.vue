@@ -39,14 +39,6 @@ const EmojiPicker = defineAsyncComponent(() => {
   })
 })
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -60,7 +52,6 @@ import {
   Paperclip,
   FileText,
   Smile,
-  MoreVertical,
   Phone,
   PhoneCall,
   Check,
@@ -1925,33 +1916,47 @@ async function sendMediaMessage() {
               </TooltipTrigger>
               <TooltipContent>{{ $t('chat.contactInfo') }}</TooltipContent>
             </Tooltip>
-            <DropdownMenu>
-              <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="icon" class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100">
-                  <MoreVertical class="h-4 w-4" />
+            <Tooltip v-if="canAssignContacts">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  @click="isAssignDialogOpen = true"
+                >
+                  <UserPlus class="h-4 w-4" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>{{ $t('chat.contactOptions') }}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem v-if="canAssignContacts" @click="isAssignDialogOpen = true">
-                  <UserPlus class="mr-2 h-4 w-4" />
-                  <span>{{ $t('chat.assignToAgent') }}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem v-if="!activeTransferId" @click="transferToAgent" :disabled="isTransferring">
-                  <UserX class="mr-2 h-4 w-4" />
-                  <span>{{ $t('chat.transferToAgent') }}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem v-if="activeTransferId" @click="resumeChatbot" :disabled="isResuming">
-                  <Play class="mr-2 h-4 w-4" />
-                  <span>{{ $t('chat.resumeChatbot') }}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem @click="isInfoPanelOpen = !isInfoPanelOpen">
-                  <Info class="mr-2 h-4 w-4" />
-                  <span>{{ isInfoPanelOpen ? $t('chat.hideContactDetails') : $t('chat.viewContactDetails') }}</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </TooltipTrigger>
+              <TooltipContent>{{ $t('chat.assignToAgent') }}</TooltipContent>
+            </Tooltip>
+            <Tooltip v-if="!activeTransferId">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  :disabled="isTransferring"
+                  @click="transferToAgent"
+                >
+                  <UserX class="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{{ $t('chat.transferToAgent') }}</TooltipContent>
+            </Tooltip>
+            <Tooltip v-if="activeTransferId">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  :disabled="isResuming"
+                  @click="resumeChatbot"
+                >
+                  <Play class="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{{ $t('chat.resumeChatbot') }}</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
