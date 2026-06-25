@@ -515,7 +515,13 @@
     "connected": "Conectado",
     "notConnected": "Não conectado",
     "connect": "Conectar",
-    "disconnect": "Desconectar"
+    "disconnect": "Desconectar",
+    "organizationLogo": "Logo da organização",
+    "uploadLogo": "Enviar logo",
+    "logoHint": "PNG ou SVG, máx. 500KB. Recomendado: tamanho quadrado.",
+    "logoInvalidType": "Apenas arquivos PNG ou SVG são permitidos",
+    "logoTooLarge": "O logo deve ter menos de 500KB",
+    "logoRemoved": "Logo removido"
   },
   "users": {
     "title": "Usuários",
