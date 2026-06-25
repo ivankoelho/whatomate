@@ -420,7 +420,7 @@ export const chatbotService = {
   pickNextTransfer: () => api.post('/chatbot/transfers/pick'),
   resumeTransfer: (id: string) => api.put(`/chatbot/transfers/${id}/resume`),
   assignTransfer: (id: string, agentId: string | null, teamId?: string | null) =>
-    api.put(`/chatbot/transfers/${id}/assign`, { agent_id: agentId, team_id: teamId })
+    api.put(`/chatbot/transfers/${id}/assign`, { agent_id: agentId, team_id: teamId }),
 
   // Export / Import
   exportChatbot: (data?: { flow_ids?: string[]; keyword_ids?: string[] }) =>
