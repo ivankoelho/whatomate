@@ -27,7 +27,7 @@ type exportChatbotRequest struct {
 	KeywordIDs []uuid.UUID `json:"keyword_ids"`
 }
 
-// ExportChatbotData exporta flows e keyword rules como JSON.
+// ExportChatbotData exporta flows e keyword rules como JSON para download.
 // POST /api/chatbot/export
 func (a *App) ExportChatbotData(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)
@@ -40,9 +40,9 @@ func (a *App) ExportChatbotData(r *fastglue.Request) error {
 	}
 
 	var req exportChatbotRequest
-	_ = r.Decode(&req, "json") // body opcional
+	_ = r.Decode(&req, "json")
 
-	// Buscar flows
+	// Buscar flows da organização
 	var flows []models.ChatbotFlow
 	flowQ := a.DB.Where("organization_id = ?", orgID)
 	if len(req.FlowIDs) > 0 {
@@ -52,7 +52,7 @@ func (a *App) ExportChatbotData(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch flows", nil, "")
 	}
 
-	// Buscar keywords
+	// Buscar keyword rules da organização
 	var keywords []models.KeywordRule
 	kwQ := a.DB.Where("organization_id = ?", orgID)
 	if len(req.KeywordIDs) > 0 {
@@ -74,20 +74,13 @@ func (a *App) ExportChatbotData(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to serialize export", nil, "")
 	}
 
-	// Audit
-	user := a.getCurrentUserName(r)
-	a.DB.Create(&models.AuditLog{
-		OrganizationID: orgID,
-		ResourceType:   "chatbot",
-		ResourceID:     orgID,
-		UserID:         userID,
-		UserName:       user,
-		Action:         models.AuditActionCreated,
-		Changes: models.JSONBArray{map[string]any{
+	// Audit — usa o helper padrão do projeto
+	a.logAudit(orgID, userID, "chatbot", orgID, models.AuditActionCreated, nil, nil,
+		map[string]any{
 			"field":     "export",
 			"new_value": fmt.Sprintf("flows:%d keywords:%d", len(flows), len(keywords)),
-		}},
-	})
+		},
+	)
 
 	r.RequestCtx.Response.Header.Set("Content-Type", "application/json")
 	r.RequestCtx.Response.Header.Set("Content-Disposition", `attachment; filename="whatomate-chatbot-export.json"`)
@@ -130,7 +123,7 @@ func (a *App) ImportChatbotData(r *fastglue.Request) error {
 		flow.UpdatedByID = &userID
 		flow.CreatedAt = time.Now()
 		flow.UpdatedAt = time.Now()
-		flow.DeletedAt = gorm.DeletedAt{} // zero value = não deletado
+		flow.DeletedAt = gorm.DeletedAt{}
 
 		if err := a.DB.Omit("Organization", "InitialTemplate", "CreatedBy", "UpdatedBy").
 			Create(&flow).Error; err != nil {
@@ -148,7 +141,7 @@ func (a *App) ImportChatbotData(r *fastglue.Request) error {
 		kw.UpdatedByID = &userID
 		kw.CreatedAt = time.Now()
 		kw.UpdatedAt = time.Now()
-		kw.DeletedAt = gorm.DeletedAt{} // zero value = não deletado
+		kw.DeletedAt = gorm.DeletedAt{}
 
 		if err := a.DB.Omit("Organization", "CreatedBy", "UpdatedBy").
 			Create(&kw).Error; err != nil {
@@ -158,20 +151,13 @@ func (a *App) ImportChatbotData(r *fastglue.Request) error {
 		keywordsImported++
 	}
 
-	// Audit
-	user := a.getCurrentUserName(r)
-	a.DB.Create(&models.AuditLog{
-		OrganizationID: orgID,
-		ResourceType:   "chatbot",
-		ResourceID:     orgID,
-		UserID:         userID,
-		UserName:       user,
-		Action:         models.AuditActionCreated,
-		Changes: models.JSONBArray{map[string]any{
+	// Audit — usa o helper padrão do projeto
+	a.logAudit(orgID, userID, "chatbot", orgID, models.AuditActionCreated, nil, nil,
+		map[string]any{
 			"field":     "import",
 			"new_value": fmt.Sprintf("flows:%d keywords:%d", flowsImported, keywordsImported),
-		}},
-	})
+		},
+	)
 
 	return r.SendEnvelope(map[string]any{
 		"flows_imported":    flowsImported,
