@@ -11,7 +11,10 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <DropdownMenuRoot :open="open" @update:open="emit('update:open', $event)">
+  <DropdownMenuRoot
+    v-bind="props.open !== undefined ? { open: props.open } : {}"
+    @update:open="emit('update:open', $event)"
+  >
     <slot />
   </DropdownMenuRoot>
 </template>
