@@ -11,6 +11,9 @@ import { Separator } from '@/components/ui/separator'
 import { toast } from 'vue-sonner'
 import { MessageSquare, Loader2 } from 'lucide-vue-next'
 
+const orgLogo = ref('')
+const orgDisplayName = ref('')
+
 const { t } = useI18n()
 
 interface SSOProvider {
@@ -46,6 +49,16 @@ const providerColors: Record<string, string> = {
 }
 
 onMounted(async () => {
+  // Load org branding from public endpoint (no auth required)
+  try {
+    const res = await fetch('/api/public/branding')
+    if (res.ok) {
+      const json = await res.json()
+      orgLogo.value = json.data?.logo_base64 || ''
+      orgDisplayName.value = json.data?.name || ''
+    }
+  } catch {}
+
   // Check for SSO error in query params
   const ssoError = route.query.sso_error as string
   if (ssoError) {
@@ -96,11 +109,14 @@ const initiateSSO = (provider: string) => {
     <div class="w-full max-w-md rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur light:bg-white light:border-gray-200 light:shadow-xl">
       <div class="p-8 space-y-1 text-center">
         <div class="flex justify-center mb-4">
-          <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-            <MessageSquare class="h-7 w-7 text-white" />
+          <div class="h-12 w-12 rounded-xl flex items-center justify-center overflow-hidden"
+              :class="orgLogo ? '' : 'bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-500/20'"
+            >
+              <img v-if="orgLogo" :src="orgLogo" class="h-full w-full object-contain" />
+              <MessageSquare v-else class="h-7 w-7 text-white" />
           </div>
         </div>
-        <h2 class="text-2xl font-bold text-white light:text-gray-900">{{ $t('auth.welcomeTitle') }}</h2>
+        <h2 class="text-2xl font-bold text-white light:text-gray-900">{{ orgDisplayName || $t('auth.welcomeTitle') }}</h2>
         <p class="text-white/50 light:text-gray-500">
           {{ $t('auth.welcomeSubtitle') }}
         </p>
