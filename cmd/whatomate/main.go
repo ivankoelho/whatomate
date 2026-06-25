@@ -724,9 +724,6 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/chatbot/export", app.ExportChatbotData)
 	g.POST("/api/chatbot/import", app.ImportChatbotData)
 
-	// Export / Import (Chatbot Flows + Keywords)
-	g.POST("/api/chatbot/export", app.ExportChatbotData)
-	g.POST("/api/chatbot/import", app.ImportChatbotData)
 
 	// AI Contexts
 	g.GET("/api/chatbot/ai-contexts", app.ListAIContexts)
