@@ -11,8 +11,9 @@ import { chatbotService } from '@/services/api'
 import { toast } from 'vue-sonner'
 import { PageHeader, DataTable, DeleteConfirmDialog, SearchInput, IconButton, ErrorState, type Column } from '@/components/shared'
 import { getErrorMessage } from '@/lib/api-utils'
-import { Plus, Pencil, Trash2, Workflow } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, Workflow, Upload, Download } from 'lucide-vue-next'
 import { useDebounceFn } from '@vueuse/core'
+import ExportImportModal from '@/components/chatbot/ExportImportModal.vue'
 
 const { t } = useI18n()
 
@@ -34,6 +35,10 @@ const searchQuery = ref('')
 const deleteDialogOpen = ref(false)
 const isDeleting = ref(false)
 const flowToDelete = ref<ChatbotFlow | null>(null)
+
+// Export/Import modal state
+const exportImportVisible = ref(false)
+const exportImportMode = ref<'export' | 'import'>('export')
 
 // Pagination state
 const currentPage = ref(1)
@@ -129,6 +134,21 @@ async function confirmDeleteFlow() {
     isDeleting.value = false
   }
 }
+
+function openExport() {
+  exportImportMode.value = 'export'
+  exportImportVisible.value = true
+}
+
+function openImport() {
+  exportImportMode.value = 'import'
+  exportImportVisible.value = true
+}
+
+function onImported() {
+  toast.success('Fluxos importados com sucesso!')
+  fetchFlows()
+}
 </script>
 
 <template>
@@ -141,6 +161,14 @@ async function confirmDeleteFlow() {
       :breadcrumbs="[{ label: $t('chatbotFlows.backToChatbot'), href: '/chatbot' }, { label: $t('nav.flows') }]"
     >
       <template #actions>
+        <Button variant="outline" size="sm" @click="openImport">
+          <Upload class="h-4 w-4 mr-2" />
+          Importar
+        </Button>
+        <Button variant="outline" size="sm" @click="openExport">
+          <Download class="h-4 w-4 mr-2" />
+          Exportar
+        </Button>
         <Button variant="outline" size="sm" @click="createFlow">
           <Plus class="h-4 w-4 mr-2" />
           {{ $t('chatbotFlows.createFlow') }}
@@ -237,6 +265,14 @@ async function confirmDeleteFlow() {
       :item-name="flowToDelete?.name"
       :is-submitting="isDeleting"
       @confirm="confirmDeleteFlow"
+    />
+
+    <!-- Export / Import Modal -->
+    <ExportImportModal
+      :visible="exportImportVisible"
+      :mode="exportImportMode"
+      @close="exportImportVisible = false"
+      @imported="onImported"
     />
   </div>
 </template>
