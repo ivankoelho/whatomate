@@ -705,3 +705,27 @@ func (a *App) UpdateOrganizationMemberRole(r *fastglue.Request) error {
 
 	return r.SendEnvelope(map[string]string{"message": "Member role updated successfully"})
 }
+
+// GetPublicBranding returns org name and logo without requiring authentication.
+// Used by the login page to display custom branding.
+func (a *App) GetPublicBranding(c *fastglue.Request) error {
+	r := c.RequestCtx
+
+	var org models.Organization
+	if err := a.DB.First(&org).Error; err != nil {
+		return c.SendEnvelope(map[string]string{"name": "Whatomate", "logo_base64": ""})
+	}
+
+	logoBase64 := ""
+	if org.Settings != nil {
+		if v, ok := org.Settings["logo_base64"].(string); ok {
+			logoBase64 = v
+		}
+	}
+
+	_ = r
+	return c.SendEnvelope(map[string]string{
+		"name":        org.Name,
+		"logo_base64": logoBase64,
+	})
+}
