@@ -96,6 +96,25 @@ const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
 }
 
+// Org branding
+const orgLogo = ref('')
+const orgDisplayName = ref('')
+
+async function loadOrgBranding() {
+  try {
+    const res = await fetch('/api/settings', { credentials: 'include' })
+    if (res.ok) {
+      const data = await res.json()
+      orgLogo.value = data.data?.settings?.logo_base64 || ''
+      orgDisplayName.value = data.data?.name || 'Whatomate'
+    }
+  } catch {}
+}
+
+onMounted(() => {
+  loadOrgBranding()
+})
+
 const handleLogout = async () => {
   await authStore.logout()
   router.push('/login')
@@ -110,10 +129,13 @@ const handleLogout = async () => {
     <!-- Mobile header -->
     <header class="fixed top-0 left-0 right-0 z-50 flex h-12 items-center justify-between border-b border-white/[0.08] light:border-gray-200 bg-[#0a0a0b]/95 light:bg-white/95 backdrop-blur-sm px-3 md:hidden">
       <RouterLink to="/" class="flex items-center gap-2">
-        <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-          <MessageSquare class="h-4 w-4 text-white" />
+        <div class="h-7 w-7 rounded-lg flex items-center justify-center overflow-hidden shrink-0"
+          :class="orgLogo ? 'bg-transparent' : 'bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-500/20'"
+        >
+          <img v-if="orgLogo" :src="orgLogo" class="h-full w-full object-contain" />
+          <MessageSquare v-else class="h-4 w-4 text-white" />
         </div>
-        <span class="font-semibold text-sm text-white light:text-gray-900">Whatomate</span>
+        <span class="font-semibold text-sm text-white light:text-gray-900">{{ orgDisplayName || 'Whatomate' }}</span>
       </RouterLink>
       <Button
         variant="ghost"
@@ -150,14 +172,17 @@ const handleLogout = async () => {
       <!-- Logo (hidden on mobile, shown in header instead) -->
       <div class="hidden md:flex h-12 items-center justify-between px-3 border-b border-white/[0.08] light:border-gray-200">
         <RouterLink to="/" class="flex items-center gap-2">
-          <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-            <MessageSquare class="h-4 w-4 text-white" />
+          <div class="h-7 w-7 rounded-lg flex items-center justify-center overflow-hidden shrink-0"
+            :class="orgLogo ? 'bg-transparent' : 'bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-500/20'"
+          >
+            <img v-if="orgLogo" :src="orgLogo" class="h-full w-full object-contain" />
+            <MessageSquare v-else class="h-4 w-4 text-white" />
           </div>
           <span
             v-if="!isCollapsed"
             class="font-semibold text-sm text-white light:text-gray-900"
           >
-            Whatomate
+            {{ orgDisplayName || 'Whatomate' }}
           </span>
         </RouterLink>
         <Button
