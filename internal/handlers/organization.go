@@ -729,3 +729,39 @@ func (a *App) GetPublicBranding(c *fastglue.Request) error {
 		"logo_base64": logoBase64,
 	})
 }
+
+// DeleteOrganization removes an organization and all its associations.
+// Only super-admins can delete organizations.
+// DELETE /api/organizations/:id
+func (a *App) DeleteOrganization(r *fastglue.Request) error {
+	_, userID, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionWrite)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	if !a.IsSuperAdmin(userID) {
+		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Only super-admins can delete organizations", nil, "")
+	}
+
+	orgID, err := parsePathUUID(r, "id", "organization")
+	if err != nil {
+		return nil
+	}
+
+	var org models.Organization
+	if err := a.DB.Where("id = ?", orgID).First(&org).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Organization not found", nil, "")
+	}
+
+	// Soft-delete the organization
+	if err := a.DB.Delete(&org).Error; err != nil {
+		a.Log.Error("Failed to delete organization", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to delete organization", nil, "")
+	}
+
+	a.logAudit(orgID, userID, "organization", orgID, models.AuditActionDeleted, &org, nil)
+
+	return r.SendEnvelope(map[string]any{
+		"message": "Organization deleted successfully",
+	})
+}
