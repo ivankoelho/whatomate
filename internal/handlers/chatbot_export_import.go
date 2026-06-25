@@ -30,13 +30,9 @@ type exportChatbotRequest struct {
 // ExportChatbotData exporta flows e keyword rules como JSON para download.
 // POST /api/chatbot/export
 func (a *App) ExportChatbotData(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceFlowsChatbot, "read")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionRead, orgID) {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
+		return err
 	}
 
 	var req exportChatbotRequest
@@ -74,8 +70,7 @@ func (a *App) ExportChatbotData(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to serialize export", nil, "")
 	}
 
-	// Audit — usa o helper padrão do projeto
-	a.logAudit(orgID, userID, "chatbot", orgID, models.AuditActionCreated, nil, nil,
+	a.logAudit(orgID, userID, models.ResourceFlowsChatbot, orgID, models.AuditActionCreated, nil, nil,
 		map[string]any{
 			"field":     "export",
 			"new_value": fmt.Sprintf("flows:%d keywords:%d", len(flows), len(keywords)),
@@ -91,13 +86,9 @@ func (a *App) ExportChatbotData(r *fastglue.Request) error {
 // ImportChatbotData importa flows e keyword rules a partir de um JSON exportado.
 // POST /api/chatbot/import
 func (a *App) ImportChatbotData(r *fastglue.Request) error {
-	orgID, userID, err := a.getOrgAndUserID(r)
+	orgID, userID, err := a.requireAuth(r, models.ResourceFlowsChatbot, "write")
 	if err != nil {
-		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
-	}
-
-	if !a.HasPermission(userID, models.ResourceFlowsChatbot, models.ActionWrite, orgID) {
-		return r.SendErrorEnvelope(fasthttp.StatusForbidden, "Permission denied", nil, "")
+		return err
 	}
 
 	body := r.RequestCtx.Request.Body()
@@ -151,8 +142,7 @@ func (a *App) ImportChatbotData(r *fastglue.Request) error {
 		keywordsImported++
 	}
 
-	// Audit — usa o helper padrão do projeto
-	a.logAudit(orgID, userID, "chatbot", orgID, models.AuditActionCreated, nil, nil,
+	a.logAudit(orgID, userID, models.ResourceFlowsChatbot, orgID, models.AuditActionCreated, nil, nil,
 		map[string]any{
 			"field":     "import",
 			"new_value": fmt.Sprintf("flows:%d keywords:%d", flowsImported, keywordsImported),
