@@ -107,11 +107,11 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	// Filter by conversation status
 	switch statusFilter {
 	case "new":
-		query = query.Where("status = ?", "new")
+		query = query.Where("contact_status = ?", "new")
 	case "in_progress":
-		query = query.Where("status = ?", "in_progress")
+		query = query.Where("contact_status = ?", "in_progress")
 	case "resolved":
-		query = query.Where("status = ?", "resolved")
+		query = query.Where("contact_status = ?", "resolved")
 	// "all" or empty: no status filter
 	}
 
