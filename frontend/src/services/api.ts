@@ -838,16 +838,13 @@ export const teamsService = {
     api.post<{ member: TeamMember }>(`/teams/${teamId}/members`, data),
   removeMember: (teamId: string, userId: string) =>
     api.delete(`/teams/${teamId}/members/${userId}`),
-  // Export / Import (teams only — wraps the bundle endpoint)
+  // Export / Import — backend: POST /api/teams-canned/export | /import
   exportAll: () =>
     api.post('/teams-canned/export', {}, { responseType: 'blob' }),
-  importAll: (file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    return api.post('/teams-canned/import', file, {
+  importAll: (jsonContent: string) =>
+    api.post('/teams-canned/import', jsonContent, {
       headers: { 'Content-Type': 'application/json' }
     })
-  }
 }
 
 // Audit Logs
