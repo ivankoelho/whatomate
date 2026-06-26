@@ -1644,7 +1644,7 @@ func (a *App) UpdateContactStatus(r *fastglue.Request) error {
 	}
 
 	// Update status
-	if err := a.DB.Model(&contact).Update("status", body.Status).Error; err != nil {
+	if err := a.DB.Model(&contact).Update("contact_status", body.Status).Error; err != nil {
 		a.Log.Error("Failed to update contact status", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update status", nil, "")
 	}
