@@ -113,13 +113,17 @@ async function handleExport() {
   isExporting.value = true
   try {
     const response = await teamsService.exportAll()
-    const blob     = new Blob([JSON.stringify(response.data)], { type: 'application/json' })
+    // response.data é string JSON (responseType: 'text') — não usar JSON.stringify!
+    const jsonStr  = typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2)
+    const blob     = new Blob([jsonStr], { type: 'application/json' })
     const url      = URL.createObjectURL(blob)
     const a        = document.createElement('a')
     const date     = new Date().toISOString().slice(0, 10)
     a.href         = url
-    a.download     = `whatomate-teams-${date}.json`
+    a.download     = `whatomate-times-${date}.json`
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
     URL.revokeObjectURL(url)
     toast.success(t('teams.exportSuccess', 'Times exportados com sucesso!'))
   } catch (e) {
