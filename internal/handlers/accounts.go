@@ -465,7 +465,7 @@ func accountToResponse(acc models.WhatsAppAccount) AccountResponse {
 		IsDefaultOutgoing:      acc.IsDefaultOutgoing,
 		AutoReadReceipt:        acc.AutoReadReceipt,
 		BusinessCallingEnabled: acc.BusinessCallingEnabled,
-		Status:                 acc.Status,
+		Status:                 string(acc.Status),
 		HasAccessToken:         acc.AccessToken != "",
 		HasAppSecret:           acc.AppSecret != "",
 		CreatedByID:            acc.CreatedByID,
@@ -625,7 +625,7 @@ func (a *App) ExchangeToken(r *fastglue.Request) error {
 	// 4. Attempt Auto-Registration
 	var priorStatus string
 	if oldAccount != nil {
-		priorStatus = oldAccount.Status
+		priorStatus = string(oldAccount.Status)
 	}
 	regErr := a.attemptAutoRegistration(ctx, account, phoneInfo, accessToken, priorStatus)
 
@@ -857,7 +857,7 @@ func (a *App) attemptAutoRegistration(ctx context.Context, account *models.Whats
 			"error", regErr,
 			"phone_id", account.PhoneID)
 		if priorStatus != "" {
-			account.Status = priorStatus
+			account.Status = models.ContactStatus(priorStatus)
 		} else {
 			account.Status = "pending_registration"
 		}
