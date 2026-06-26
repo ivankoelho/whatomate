@@ -310,7 +310,7 @@ type WhatsAppAccount struct {
 	// button option, and by the send path to refuse voice_call sends.
 	BusinessCallingEnabled bool       `gorm:"default:false" json:"business_calling_enabled"`
 	IsSMB                  bool       `gorm:"default:false" json:"is_smb"`
-	Status                 string     `gorm:"size:20;default:'active'" json:"status"`
+	Status                 ContactStatus `gorm:"size:20;default:'new'" json:"status"`
 	Pin                    string     `gorm:"size:255" json:"-"` // 6-digit 2FA PIN (encrypted)
 	CreatedByID            *uuid.UUID `gorm:"type:uuid" json:"created_by_id,omitempty"`
 	UpdatedByID            *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
