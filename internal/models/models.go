@@ -310,7 +310,7 @@ type WhatsAppAccount struct {
 	// button option, and by the send path to refuse voice_call sends.
 	BusinessCallingEnabled bool       `gorm:"default:false" json:"business_calling_enabled"`
 	IsSMB                  bool       `gorm:"default:false" json:"is_smb"`
-	Status                 ContactStatus `gorm:"size:20;default:'new'" json:"status"`
+	Status                 string        `gorm:"size:20;default:'active'" json:"status"`
 	Pin                    string     `gorm:"size:255" json:"-"` // 6-digit 2FA PIN (encrypted)
 	CreatedByID            *uuid.UUID `gorm:"type:uuid" json:"created_by_id,omitempty"`
 	UpdatedByID            *uuid.UUID `gorm:"type:uuid" json:"updated_by_id,omitempty"`
@@ -361,6 +361,9 @@ type Contact struct {
 
 	// Business-Scoped User ID (from Meta BSUID rollout)
 	BSUID string `gorm:"size:150;index" json:"bsuid,omitempty"`
+
+	// Conversation status (new / in_progress / resolved)
+	ContactStatus ContactStatus `gorm:"size:20;default:'new'" json:"contact_status"`
 
 	// Chatbot SLA tracking
 	ChatbotLastMessageAt *time.Time `json:"chatbot_last_message_at,omitempty"` // When chatbot last sent a message
