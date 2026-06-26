@@ -476,7 +476,7 @@ export const cannedResponsesService = {
     api.put(`/canned-responses/${id}`, data),
   delete: (id: string) => api.delete(`/canned-responses/${id}`),
   use: (id: string) => api.post(`/canned-responses/${id}/use`),
-  // Export / Import — mesmo endpoint do teamsService (bundle teams + canned)
+  // Export / Import — bundle teams + canned responses (POST /api/teams-canned/export|import)
   exportAll: () =>
     api.post('/teams-canned/export', {}, { responseType: 'text' }),
   importAll: (jsonContent: string) =>
