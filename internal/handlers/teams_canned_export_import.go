@@ -18,9 +18,9 @@ import (
 
 // teamsAndCannedExportPayload é o envelope JSON exportado.
 type teamsAndCannedExportPayload struct {
-	Version        string                  `json:"version"`
-	ExportedAt     time.Time               `json:"exported_at"`
-	Teams          []models.Team           `json:"teams"`
+	Version         string                  `json:"version"`
+	ExportedAt      time.Time               `json:"exported_at"`
+	Teams           []models.Team           `json:"teams"`
 	CannedResponses []models.CannedResponse `json:"canned_responses"`
 }
 
@@ -36,7 +36,6 @@ func (a *App) ExportTeamsAndCanned(r *fastglue.Request) error {
 		return err
 	}
 
-	// Buscar equipes com membros
 	var teams []models.Team
 	if err := a.DB.
 		Where("organization_id = ?", orgID).
@@ -45,7 +44,6 @@ func (a *App) ExportTeamsAndCanned(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to fetch teams", nil, "")
 	}
 
-	// Buscar respostas rápidas
 	var canned []models.CannedResponse
 	if err := a.DB.
 		Where("organization_id = ?", orgID).
@@ -73,7 +71,10 @@ func (a *App) ExportTeamsAndCanned(r *fastglue.Request) error {
 	)
 
 	r.RequestCtx.Response.Header.Set("Content-Type", "application/json")
-	r.RequestCtx.Response.Header.Set("Content-Disposition", `attachment; filename="whatomate-teams-canned-export.json"`)
+	r.RequestCtx.Response.Header.Set(
+		"Content-Disposition",
+		`attachment; filename="whatomate-teams-canned-export.json"`,
+	)
 	r.RequestCtx.Response.SetBody(raw)
 	return nil
 }
@@ -102,9 +103,6 @@ func (a *App) ImportTeamsAndCanned(r *fastglue.Request) error {
 
 	teamsImported := 0
 	for _, team := range payload.Teams {
-		oldID := team.ID
-
-		// Criar nova equipe com ID novo
 		newTeam := models.Team{
 			BaseModel: models.BaseModel{
 				ID:        uuid.New(),
@@ -122,28 +120,31 @@ func (a *App) ImportTeamsAndCanned(r *fastglue.Request) error {
 			UpdatedByID:         &userID,
 		}
 
-		if err := a.DB.Omit("Organization", "Members", "CreatedBy", "UpdatedBy").
+		if err := a.DB.
+			Omit("Organization", "Members", "CreatedBy", "UpdatedBy").
 			Create(&newTeam).Error; err != nil {
 			a.Log.Error("Failed to import team", "name", team.Name, "error", err)
 			continue
 		}
 
-		// Importar membros da equipe (apenas referência ao userID — não recria usuários)
+		// Importar membros (só se o usuário existir nessa org)
 		for _, member := range team.Members {
-			// Verificar se usuário existe na nova org
 			var uo models.UserOrganization
 			if a.DB.Where("user_id = ? AND organization_id = ?", member.UserID, orgID).
 				First(&uo).Error != nil {
-				a.Log.Warn("Skipping team member not found in org",
-					"user_id", member.UserID, "team", team.Name,
-					"original_team_id", oldID)
 				continue
 			}
 			newMember := models.TeamMember{
+				BaseModel: models.BaseModel{
+					ID:        uuid.New(),
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				},
 				TeamID: newTeam.ID,
 				UserID: member.UserID,
+				Role:   member.Role,
 			}
-			a.DB.Create(&newMember)
+			_ = a.DB.Omit("Team", "User").Create(&newMember).Error
 		}
 
 		teamsImported++
@@ -151,14 +152,25 @@ func (a *App) ImportTeamsAndCanned(r *fastglue.Request) error {
 
 	cannedImported := 0
 	for _, cr := range payload.CannedResponses {
-		cr.ID = uuid.New()
-		cr.OrganizationID = orgID
-		cr.CreatedAt = time.Now()
-		cr.UpdatedAt = time.Now()
-		cr.DeletedAt = gorm.DeletedAt{}
-		cr.UsageCount = 0
+		newCR := models.CannedResponse{
+			BaseModel: models.BaseModel{
+				ID:        uuid.New(),
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+				DeletedAt: gorm.DeletedAt{},
+			},
+			OrganizationID: orgID,
+			Name:           cr.Name,
+			Shortcut:       cr.Shortcut,
+			Content:        cr.Content,
+			Category:       cr.Category,
+			IsActive:       cr.IsActive,
+			Buttons:        cr.Buttons,
+			CreatedByID:    userID,
+			UsageCount:     0,
+		}
 
-		if err := a.DB.Omit("Organization").Create(&cr).Error; err != nil {
+		if err := a.DB.Omit("Organization", "CreatedBy").Create(&newCR).Error; err != nil {
 			a.Log.Error("Failed to import canned response", "name", cr.Name, "error", err)
 			continue
 		}
