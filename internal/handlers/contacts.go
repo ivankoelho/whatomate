@@ -30,6 +30,7 @@ type ContactResponse struct {
 	ProfileName        string     `json:"profile_name"`
 	AvatarURL          string     `json:"avatar_url"`
 	Status             string     `json:"status"`
+	ContactStatus      string     `json:"contact_status"`
 	Tags               []string   `json:"tags"`
 	Metadata           any        `json:"metadata"`
 	LastMessageAt      *time.Time `json:"last_message_at"`
@@ -103,14 +104,14 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	// or contacts with an active chat transfer to them
 	query = a.scopeAssignedContact(query, userID, orgID)
 
-	// Filter by conversation status (contact_status column)
+	// Filter by conversation status
 	switch statusFilter {
 	case "new":
-		query = query.Where("contact_status = ?", "new")
+		query = query.Where("status = ?", "new")
 	case "in_progress":
-		query = query.Where("contact_status = ?", "in_progress")
+		query = query.Where("status = ?", "in_progress")
 	case "resolved":
-		query = query.Where("contact_status = ?", "resolved")
+		query = query.Where("status = ?", "resolved")
 	// "all" or empty: no status filter
 	}
 
@@ -191,8 +192,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 			PhoneNumber:        phoneNumber,
 			Name:               profileName,
 			ProfileName:        profileName,
-			Status:             string(c.Status),
-			ContactStatus:      string(c.Status),
+			Status:             "active",
 			Tags:               tags,
 			Metadata:           c.Metadata,
 			LastMessageAt:      c.LastMessageAt,
