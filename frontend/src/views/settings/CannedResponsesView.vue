@@ -11,7 +11,7 @@ import { PageHeader, SearchInput, DeleteConfirmDialog, DataTable, IconButton, Er
 import { cannedResponsesService, type CannedResponse } from '@/services/api'
 import { useCrudState } from '@/composables/useCrudState'
 import { toast } from 'vue-sonner'
-import { Plus, MessageSquareText, Pencil, Trash2, Copy } from 'lucide-vue-next'
+import { Plus, MessageSquareText, Pencil, Trash2, Copy, Download, Upload } from 'lucide-vue-next'
 import { getErrorMessage } from '@/lib/api-utils'
 import { CANNED_RESPONSE_CATEGORIES, getLabelFromValue } from '@/lib/constants'
 import { useSearchPagination } from '@/composables/useSearchPagination'
@@ -95,12 +95,76 @@ async function confirmDelete() {
 
 function copyToClipboard(content: string) { navigator.clipboard.writeText(content); toast.success(t('common.copiedToClipboard')) }
 function getCategoryLabel(category: string): string { return getLabelFromValue(CANNED_RESPONSE_CATEGORIES, category) || t('cannedResponses.uncategorized') }
+
+// ── Export ──────────────────────────────────────────────────────
+const isExporting = ref(false)
+
+async function handleExport() {
+  if (isExporting.value) return
+  isExporting.value = true
+  try {
+    const response = await cannedResponsesService.exportAll()
+    const jsonStr  = typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2)
+    const blob     = new Blob([jsonStr], { type: 'application/json' })
+    const url      = URL.createObjectURL(blob)
+    const a        = document.createElement('a')
+    a.href         = url
+    a.download     = `whatomate-respostas-rapidas-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success(t('cannedResponses.exportSuccess', 'Respostas rápidas exportadas com sucesso!'))
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('cannedResponses.exportError', 'Falha ao exportar respostas rápidas')))
+  } finally {
+    isExporting.value = false
+  }
+}
+
+// ── Import ──────────────────────────────────────────────────────
+const isImporting   = ref(false)
+const importFileRef = ref<HTMLInputElement | null>(null)
+
+function triggerImport() {
+  importFileRef.value?.click()
+}
+
+async function handleImportFile(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  isImporting.value = true
+  try {
+    const text     = await file.text()
+    const response = await cannedResponsesService.importAll(text)
+    const result   = (response.data as any)?.data ?? response.data
+    const cannedCount = result?.canned_responses_imported ?? result?.canned_responses ?? '?'
+    toast.success(
+      t('cannedResponses.importSuccess', `${cannedCount} resposta(s) rápida(s) importada(s) com sucesso!`)
+    )
+    await fetchItems()
+  } catch (e) {
+    toast.error(getErrorMessage(e, t('cannedResponses.importError', 'Falha ao importar respostas rápidas')))
+  } finally {
+    isImporting.value = false
+    if (importFileRef.value) importFileRef.value.value = ''
+  }
+}
 </script>
 
 <template>
   <div class="flex flex-col h-full bg-[#0a0a0b] light:bg-gray-50">
     <PageHeader :title="$t('cannedResponses.title')" :icon="MessageSquareText" icon-gradient="bg-gradient-to-br from-teal-500 to-emerald-600 shadow-teal-500/20" back-link="/settings" :breadcrumbs="breadcrumbs">
       <template #actions>
+        <input ref="importFileRef" type="file" accept=".json" class="hidden" @change="handleImportFile" />
+        <Button variant="outline" size="sm" :disabled="isImporting" @click="triggerImport">
+          <Upload class="h-4 w-4 mr-2" />
+          {{ isImporting ? $t('common.importing', 'Importando...') : $t('common.import', 'Importar') }}
+        </Button>
+        <Button variant="outline" size="sm" :disabled="isExporting" @click="handleExport">
+          <Download class="h-4 w-4 mr-2" />
+          {{ isExporting ? $t('common.exporting', 'Exportando...') : $t('common.export', 'Exportar') }}
+        </Button>
         <Button variant="outline" size="sm" @click="openCreate"><Plus class="h-4 w-4 mr-2" />{{ $t('cannedResponses.addResponse') }}</Button>
       </template>
     </PageHeader>
