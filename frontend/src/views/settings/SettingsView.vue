@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,29 +10,61 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { PageHeader, AuditLogPanel } from '@/components/shared'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from 'vue-sonner'
-import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music, MessageSquare, X as XIcon } from 'lucide-vue-next'
-import { usersService, organizationService } from '@/services/api'
+import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music, MessageSquare, X as XIcon, TriangleAlert, Trash2 } from 'lucide-vue-next'
+import { usersService, organizationService, organizationsService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const router = useRouter()
 
-// The active org may be overridden by the X-Organization-ID header
-// (localStorage.selected_organization_id) when a super admin switches orgs.
-// That override is what the backend uses for scoping, so we must read it here
-// too — otherwise the activity log panel would query the user's default org
-// instead of the currently-active one.
 const orgID = computed(
   () => localStorage.getItem('selected_organization_id') || authStore.organizationId,
 )
 const userID = computed(() => authStore.user?.id || '')
 const canWriteAccounts = computed(() => authStore.hasPermission('accounts', 'write'))
+const isSuperAdmin = computed(() => authStore.user?.is_super_admin === true)
 
 const isSubmitting = ref(false)
 const isLoading = ref(true)
+
+// ── Delete org modal ─────────────────────────────────────────────
+const showDeleteOrgModal = ref(false)
+const deleteConfirmText = ref('')
+const isDeletingOrg = ref(false)
+const ORG_CONFIRM_PHRASE = 'DELETAR ORGANIZAÇÃO'
+
+const deleteConfirmMatch = computed(
+  () => deleteConfirmText.value.trim().toUpperCase() === ORG_CONFIRM_PHRASE.toUpperCase()
+)
+
+async function deleteOrganization() {
+  if (!deleteConfirmMatch.value || !orgID.value) return
+  isDeletingOrg.value = true
+  try {
+    await organizationsService.delete(orgID.value)
+    toast.success('Organização deletada com sucesso.')
+    // Limpa sessão e redireciona para login
+    authStore.logout()
+    router.push('/auth/login')
+  } catch (err: any) {
+    const msg = err?.response?.data?.message ?? 'Falha ao deletar a organização.'
+    toast.error(msg)
+  } finally {
+    isDeletingOrg.value = false
+    showDeleteOrgModal.value = false
+    deleteConfirmText.value = ''
+  }
+}
+
+function openDeleteModal() {
+  deleteConfirmText.value = ''
+  showDeleteOrgModal.value = true
+}
 
 // General Settings
 const generalSettings = ref({
@@ -71,9 +104,6 @@ const ringbackAudio = ref<HTMLAudioElement | null>(null)
 const playingHoldMusic = ref(false)
 const playingRingback = ref(false)
 
-// Bump these keys to force the AuditLogPanel to remount and refetch after a save.
-// The backend writes audit entries asynchronously in a goroutine, so we delay
-// the remount slightly to give the write time to hit the DB before refetching.
 const generalLogKey = ref(0)
 const notificationLogKey = ref(0)
 const callingLogKey = ref(0)
@@ -89,7 +119,6 @@ onMounted(async () => {
       usersService.me()
     ])
 
-    // Organization settings
     const orgData = orgResponse.data.data || orgResponse.data
     if (orgData) {
       generalSettings.value = {
@@ -112,7 +141,6 @@ onMounted(async () => {
       }
     }
 
-    // User notification settings
     const user = userResponse.data.data || userResponse.data
     if (user.settings) {
       notificationSettings.value = {
@@ -128,8 +156,6 @@ onMounted(async () => {
   }
 })
 
-
-// Logo upload handler
 async function handleLogoUpload(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
@@ -171,9 +197,7 @@ async function saveGeneralSettings() {
     }
     await organizationService.updateSettings(payload)
     toast.success(t('settings.generalSaved'))
-    // Clear secret input after save
     generalSettings.value.meta_app_secret = ''
-    // Refresh organization settings to update has_meta_app_secret status
     const orgResponse = await organizationService.getSettings()
     const orgData = orgResponse.data.data || orgResponse.data
     if (orgData) {
@@ -309,7 +333,6 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 <div class="space-y-2">
                   <Label class="text-white/70 light:text-gray-700">{{ $t('settings.organizationLogo') }}</Label>
                   <div class="flex items-center gap-4">
-                    <!-- Preview -->
                     <div class="h-10 w-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0"
                       :class="generalSettings.logo_base64 ? 'bg-transparent border border-white/[0.1] light:border-gray-200' : 'bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-500/20'"
                     >
@@ -389,7 +412,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
               </div>
             </div>
 
-            <!-- Meta App Credentials Card (Gated on canWriteAccounts) -->
+            <!-- Meta App Credentials Card -->
             <div v-if="canWriteAccounts" class="mt-6 rounded-xl border border-white/[0.08] bg-white/[0.02] light:bg-white light:border-gray-200">
               <div class="p-6 pb-3">
                 <h3 class="text-lg font-semibold text-white light:text-gray-900">{{ $t('settings.metaAppCredentials') }}</h3>
@@ -431,6 +454,38 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 </div>
               </div>
             </div>
+
+            <!-- ── Danger Zone (apenas super-admin) ─────────────────────── -->
+            <div v-if="isSuperAdmin" class="mt-6 rounded-xl border border-red-500/30 bg-red-500/[0.04] light:bg-red-50 light:border-red-200">
+              <div class="p-6 pb-3 flex items-center gap-3">
+                <TriangleAlert class="h-5 w-5 text-red-500 shrink-0" />
+                <div>
+                  <h3 class="text-lg font-semibold text-red-400 light:text-red-600">Zona de Perigo</h3>
+                  <p class="text-sm text-red-400/60 light:text-red-500/70">Ações irreversíveis. Proceda com extremo cuidado.</p>
+                </div>
+              </div>
+              <div class="p-6 pt-3">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="font-medium text-white light:text-gray-900">Deletar esta organização</p>
+                    <p class="text-sm text-white/40 light:text-gray-500">
+                      Remove permanentemente a organização, todos os usuários, fluxos, contatos e dados associados.
+                      Esta ação <span class="font-semibold text-red-400">não pode ser desfeita</span>.
+                    </p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    class="shrink-0 ml-6 bg-red-600 hover:bg-red-700 text-white border-0"
+                    @click="openDeleteModal"
+                  >
+                    <Trash2 class="h-4 w-4 mr-2" />
+                    Deletar organização
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             <div v-if="orgID" class="mt-4">
               <AuditLogPanel :key="generalLogKey" resource-type="settings.general" :resource-id="orgID" />
             </div>
@@ -616,5 +671,72 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
         </Tabs>
       </div>
     </ScrollArea>
+
+    <!-- ── Modal de confirmação de exclusão da organização ──────────── -->
+    <Dialog :open="showDeleteOrgModal" @update:open="showDeleteOrgModal = $event">
+      <DialogContent class="bg-[#141414] border border-red-500/30 text-white max-w-md light:bg-white light:text-gray-900">
+        <DialogHeader>
+          <div class="flex items-center gap-3 mb-1">
+            <div class="h-10 w-10 rounded-full bg-red-500/15 flex items-center justify-center shrink-0">
+              <TriangleAlert class="h-5 w-5 text-red-500" />
+            </div>
+            <DialogTitle class="text-red-400 text-lg light:text-red-600">
+              Deletar organização permanentemente
+            </DialogTitle>
+          </div>
+          <DialogDescription class="text-white/60 light:text-gray-500 space-y-3 pt-2">
+            <p>
+              Esta ação irá <span class="font-semibold text-white light:text-gray-900">deletar definitivamente</span>
+              esta organização e <span class="font-semibold text-white light:text-gray-900">todos os seus dados</span>, incluindo:
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-sm text-white/50 light:text-gray-400 pl-1">
+              <li>Usuários e membros da organização</li>
+              <li>Contatos, conversas e histórico de mensagens</li>
+              <li>Fluxos de chatbot e palavras-chave</li>
+              <li>Equipes, respostas rápidas e campanhas</li>
+              <li>Integrações, webhooks e configurações</li>
+              <li>Todos os arquivos e mídias enviados</li>
+            </ul>
+            <p class="font-semibold text-red-400 light:text-red-500 text-sm mt-2">
+              ⚠ Esta operação é irreversível e não permite restauração.
+            </p>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="mt-4 space-y-2">
+          <Label class="text-white/70 light:text-gray-700 text-sm">
+            Para confirmar, digite exatamente:
+            <span class="font-mono font-bold text-red-400 ml-1">DELETAR ORGANIZAÇÃO</span>
+          </Label>
+          <Input
+            v-model="deleteConfirmText"
+            placeholder="DELETAR ORGANIZAÇÃO"
+            class="border-red-500/30 bg-red-500/[0.05] text-white placeholder:text-white/20 focus-visible:ring-red-500/50 light:bg-red-50 light:text-gray-900 light:placeholder:text-gray-400"
+            @keydown.enter="deleteConfirmMatch && deleteOrganization()"
+          />
+        </div>
+
+        <DialogFooter class="mt-6 flex gap-2">
+          <Button
+            variant="ghost"
+            class="text-white/60 hover:text-white hover:bg-white/[0.06] light:text-gray-600 light:hover:bg-gray-100"
+            :disabled="isDeletingOrg"
+            @click="showDeleteOrgModal = false"
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            class="bg-red-600 hover:bg-red-700 text-white border-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            :disabled="!deleteConfirmMatch || isDeletingOrg"
+            @click="deleteOrganization"
+          >
+            <Loader2 v-if="isDeletingOrg" class="mr-2 h-4 w-4 animate-spin" />
+            <Trash2 v-else class="mr-2 h-4 w-4" />
+            Deletar permanentemente
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
