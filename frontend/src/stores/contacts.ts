@@ -302,7 +302,7 @@ export const useContactsStore = defineStore('contacts', () => {
         contact.unread_count++
         contact.last_inbound_at = message.created_at
         contact.service_window_open = true
-        // FIX 1: auto-transição para in_progress ao receber mensagem
+        // FIX-1: auto-transição new → in_progress ao receber mensagem
         if (contact.contact_status === 'new') {
           contact.contact_status = 'in_progress'
           updateContactStatus(contact.id, 'in_progress')
