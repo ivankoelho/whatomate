@@ -694,9 +694,9 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 		if dbErr := a.DB.Model(&contact).Update("contact_status", string(models.ContactStatusInProgress)).Error; dbErr == nil {
 			contact.ContactStatus = models.ContactStatusInProgress
 			if a.WSHub != nil {
-				a.WSHub.BroadcastToOrg(orgID, map[string]any{
-					"type": "contact_status_changed",
-					"payload": map[string]any{
+				a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+					Type: "contact_status_changed",
+					Payload: map[string]any{
 						"contact_id":     contact.ID,
 						"contact_status": string(models.ContactStatusInProgress),
 					},
