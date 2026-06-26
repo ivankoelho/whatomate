@@ -404,7 +404,7 @@ type CreateOrganizationRequest struct {
 
 // CreateOrganization creates a new organization
 func (a *App) CreateOrganization(r *fastglue.Request) error {
-	_, userID, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionWrite)
+	_, userID, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionDelete)
 	if err != nil {
 		return nil
 	}
@@ -734,7 +734,7 @@ func (a *App) GetPublicBranding(c *fastglue.Request) error {
 // Only super-admins can delete organizations.
 // DELETE /api/organizations/:id
 func (a *App) DeleteOrganization(r *fastglue.Request) error {
-	_, userID, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionWrite)
+	_, userID, err := a.requireAuth(r, models.ResourceOrganizations, models.ActionDelete)
 	if err != nil {
 		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
 	}
