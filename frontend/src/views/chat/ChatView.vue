@@ -113,6 +113,18 @@ const messagesEndRef = ref<HTMLElement | null>(null)
 const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
+
+// ── Status tabs ──────────────────────────────────────────────
+type StatusTab = 'all' | 'new' | 'in_progress' | 'resolved'
+const STATUS_TABS: { key: StatusTab; label: string; icon: string }[] = [
+  { key: 'all',         label: 'Todos',       icon: '💬' },
+  { key: 'new',         label: 'Novo',        icon: '🔵' },
+  { key: 'in_progress', label: 'Andamento',   icon: '🟡' },
+  { key: 'resolved',    label: 'Concluído',   icon: '✅' },
+]
+function setStatusTab(tab: StatusTab) {
+  contactsStore.setStatusFilter(tab)
+}
 const isTransferring = ref(false)
 const isResuming = ref(false)
 // Tracks incoming messages that arrived while the chat is open.
@@ -1726,6 +1738,27 @@ async function sendMediaMessage() {
             </PopoverContent>
           </Popover>
         </div>
+        <!-- Status Tabs -->
+        <div class="flex border-b border-white/[0.06] light:border-gray-200 shrink-0">
+          <button
+            v-for="tab in STATUS_TABS"
+            :key="tab.key"
+            @click="setStatusTab(tab.key)"
+            :class="[
+              'flex-1 py-2 text-xs font-medium transition-colors relative',
+              contactsStore.statusFilter === tab.key
+                ? 'text-white light:text-gray-900'
+                : 'text-white/40 light:text-gray-400 hover:text-white/70 light:hover:text-gray-600'
+            ]"
+          >
+            <span>{{ tab.label }}</span>
+            <span
+              v-if="contactsStore.statusFilter === tab.key"
+              class="absolute bottom-0 left-0 right-0 h-[2px] bg-green-500 rounded-full"
+            />
+          </button>
+        </div>
+
         <!-- Active tag filters -->
         <div v-if="contactsStore.selectedTags.length > 0" class="flex flex-wrap gap-1 mt-2">
           <TagBadge
