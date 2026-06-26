@@ -689,6 +689,22 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to send message", nil, "")
 	}
 
+	// BUG-3: Ao agente enviar mensagem, transitar contato para in_progress
+	if contact.ContactStatus != models.ContactStatusInProgress {
+		if err := a.DB.Model(&contact).Update("contact_status", string(models.ContactStatusInProgress)).Error; err == nil {
+			contact.ContactStatus = models.ContactStatusInProgress
+			if a.WSHub != nil {
+				a.WSHub.BroadcastToOrg(orgID, map[string]any{
+					"type": "contact_status_changed",
+					"payload": map[string]any{
+						"contact_id":     contact.ID,
+						"contact_status": string(models.ContactStatusInProgress),
+					},
+				})
+			}
+		}
+	}
+
 	// Build response
 	response := MessageResponse{
 		ID:              message.ID,
@@ -1645,7 +1661,7 @@ func (a *App) UpdateContactStatus(r *fastglue.Request) error {
 	}
 
 	// Update status
-	if err := a.DB.Model(&contact).Update("status", body.Status).Error; err != nil {
+	if err := a.DB.Model(&contact).Update("contact_status", body.Status).Error; err != nil {
 		a.Log.Error("Failed to update contact status", "error", err)
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update status", nil, "")
 	}
@@ -1653,6 +1669,17 @@ func (a *App) UpdateContactStatus(r *fastglue.Request) error {
 	a.logAudit(orgID, userID, "contact", contactID, models.AuditActionUpdated, nil, map[string]any{
 		"status": body.Status,
 	})
+
+	// BUG-2: Broadcast contact_status_changed via WebSocket para todos os agentes
+	if a.WSHub != nil {
+		a.WSHub.BroadcastToOrg(orgID, map[string]any{
+			"type": "contact_status_changed",
+			"payload": map[string]any{
+				"contact_id":     contactID,
+				"contact_status": body.Status,
+			},
+		})
+	}
 
 	return r.SendEnvelope(map[string]any{
 		"id":             contactID,
