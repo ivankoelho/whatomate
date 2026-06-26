@@ -689,9 +689,9 @@ func (a *App) SendMessage(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to send message", nil, "")
 	}
 
-	// BUG-3: Ao agente enviar mensagem, transitar contato para in_progress
+	// BUG-3: Ao agente enviar mensagem, transitar contato para in_progress automaticamente
 	if contact.ContactStatus != models.ContactStatusInProgress {
-		if err := a.DB.Model(&contact).Update("contact_status", string(models.ContactStatusInProgress)).Error; err == nil {
+		if dbErr := a.DB.Model(&contact).Update("contact_status", string(models.ContactStatusInProgress)).Error; dbErr == nil {
 			contact.ContactStatus = models.ContactStatusInProgress
 			if a.WSHub != nil {
 				a.WSHub.BroadcastToOrg(orgID, map[string]any{
@@ -1670,7 +1670,7 @@ func (a *App) UpdateContactStatus(r *fastglue.Request) error {
 		"status": body.Status,
 	})
 
-	// BUG-2: Broadcast contact_status_changed via WebSocket para todos os agentes
+	// BUG-2: Broadcast status change para todos os agentes conectados
 	if a.WSHub != nil {
 		a.WSHub.BroadcastToOrg(orgID, map[string]any{
 			"type": "contact_status_changed",
