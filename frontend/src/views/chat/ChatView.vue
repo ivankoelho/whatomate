@@ -114,31 +114,6 @@ const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
 
-// ── FIX-2: Concluir / Reabrir atendimento ─────────────────────
-const isResolvingContact = ref(false)
-const isCurrentContactResolved = computed(
-  () => contactsStore.currentContact?.contact_status === 'resolved'
-)
-
-async function resolveContact() {
-  const contact = contactsStore.currentContact
-  if (!contact || isResolvingContact.value) return
-  isResolvingContact.value = true
-  try {
-    const nextStatus = contact.contact_status === 'resolved' ? 'in_progress' : 'resolved'
-    await contactsStore.updateContactStatus(contact.id, nextStatus)
-    if (nextStatus === 'resolved') {
-      toast.success(t('chat.contactResolved', 'Atendimento concluído'))
-    } else {
-      toast.success(t('chat.contactReopened', 'Atendimento reaberto'))
-    }
-  } catch {
-    toast.error(t('chat.contactStatusError', 'Erro ao atualizar status'))
-  } finally {
-    isResolvingContact.value = false
-  }
-}
-
 // ── Status tabs ──────────────────────────────────────────────
 type StatusTab = 'all' | 'new' | 'in_progress' | 'resolved'
 const STATUS_TABS: { key: StatusTab; label: string; icon: string }[] = [
@@ -157,6 +132,11 @@ const isResuming = ref(false)
 // (WhatsApp-style). Click the pill to jump up to the first message of
 // the unread batch; cleared on click or contact switch. See issue #280.
 const newMessagesCount = ref(0)
+
+// FIX-5: contador de contatos aguardando atendimento (status = 'new')
+const newContactsCount = computed(
+  () => contactsStore.contacts.filter(c => c.contact_status === 'new').length
+)
 const firstUnreadId = ref<string | null>(null)
 const isAtBottom = ref(true)
 const SCROLL_BOTTOM_THRESHOLD = 80
@@ -1776,7 +1756,16 @@ async function sendMediaMessage() {
                 : 'text-white/40 light:text-gray-400 hover:text-white/70 light:hover:text-gray-600'
             ]"
           >
-            <span>{{ tab.label }}</span>
+            <span class="flex items-center justify-center gap-1">
+              {{ tab.label }}
+              <!-- FIX-5: badge de contador apenas na aba "Novo" -->
+              <span
+                v-if="tab.key === 'new' && newContactsCount > 0"
+                class="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-none"
+              >
+                {{ newContactsCount > 99 ? '99+' : newContactsCount }}
+              </span>
+            </span>
             <span
               v-if="contactsStore.statusFilter === tab.key"
               class="absolute bottom-0 left-0 right-0 h-[2px] bg-green-500 rounded-full"
@@ -1830,12 +1819,29 @@ async function sendMediaMessage() {
                 </span>
               </div>
               <div class="flex items-center justify-between gap-2">
+                <!-- FIX-4: prévia da última mensagem (fallback: telefone) -->
                 <p class="flex-1 min-w-0 text-xs text-white/50 light:text-gray-500 truncate">
-                  {{ contact.phone_number }}
+                  {{ contact.last_message_preview || contact.phone_number }}
                 </p>
                 <Badge v-if="contact.unread_count > 0" class="flex-shrink-0 h-5 text-[10px] bg-emerald-500/20 text-emerald-400 light:bg-emerald-100 light:text-emerald-700">
                   {{ contact.unread_count }}
                 </Badge>
+              </div>
+              <!-- FIX-4: tags do contato (máx 2 tags) -->
+              <div v-if="contact.tags && contact.tags.length > 0" class="flex flex-wrap gap-1 mt-1">
+                <span
+                  v-for="tag in contact.tags.slice(0, 2)"
+                  :key="tag"
+                  class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.06] text-white/60 light:bg-gray-100 light:text-gray-500 truncate max-w-[80px]"
+                >
+                  {{ tag }}
+                </span>
+                <span
+                  v-if="contact.tags.length > 2"
+                  class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.04] text-white/40 light:bg-gray-50 light:text-gray-400"
+                >
+                  +{{ contact.tags.length - 2 }}
+                </span>
               </div>
             </div>
           </div>
@@ -1958,19 +1964,6 @@ async function sendMediaMessage() {
               </TooltipTrigger>
               <TooltipContent>{{ $t('chat.contactInfo') }}</TooltipContent>
             </Tooltip>
-            <Tooltip v-if="canAssignContacts">
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
-                  @click="isAssignDialogOpen = true"
-                >
-                  <UserPlus class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{{ $t('chat.assignToAgent') }}</TooltipContent>
-            </Tooltip>
             <!-- ✅ Botão: Concluir / Reabrir atendimento -->
             <Tooltip>
               <TooltipTrigger as-child>
@@ -1991,6 +1984,20 @@ async function sendMediaMessage() {
               <TooltipContent>
                 {{ isCurrentContactResolved ? 'Reabrir atendimento' : 'Concluir atendimento' }}
               </TooltipContent>
+            </Tooltip>
+
+            <Tooltip v-if="canAssignContacts">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  @click="isAssignDialogOpen = true"
+                >
+                  <UserPlus class="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{{ $t('chat.assignToAgent') }}</TooltipContent>
             </Tooltip>
             <Tooltip v-if="!activeTransferId">
               <TooltipTrigger as-child>
