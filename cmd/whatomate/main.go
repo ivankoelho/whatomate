@@ -629,6 +629,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.PUT("/api/contacts/{id}", app.UpdateContact)
 	g.DELETE("/api/contacts/{id}", app.DeleteContact)
 	g.PUT("/api/contacts/{id}/assign", app.AssignContact)
+	g.PUT("/api/contacts/{id}/status", app.UpdateContactStatus)
 	g.PUT("/api/contacts/{id}/tags", app.UpdateContactTags)
 	g.GET("/api/contacts/{id}/session-data", app.GetContactSessionData)
 
