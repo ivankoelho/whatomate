@@ -94,6 +94,7 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	pg := parsePagination(r)
 	search := string(r.RequestCtx.QueryArgs().Peek("search"))
 	tagsParam := string(r.RequestCtx.QueryArgs().Peek("tags"))
+	statusFilter := string(r.RequestCtx.QueryArgs().Peek("status"))
 
 	var contacts []models.Contact
 	query := a.ScopeToOrg(a.DB, userID, orgID)
@@ -101,6 +102,17 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	// Users without contacts:read permission can only see contacts assigned to them
 	// or contacts with an active chat transfer to them
 	query = a.scopeAssignedContact(query, userID, orgID)
+
+	// Filter by conversation status
+	switch statusFilter {
+	case "new":
+		query = query.Where("status = ?", "new")
+	case "in_progress":
+		query = query.Where("status = ?", "in_progress")
+	case "resolved":
+		query = query.Where("status = ?", "resolved")
+	// "all" or empty: no status filter
+	}
 
 	if search != "" {
 		// Limit search string length to prevent abuse
