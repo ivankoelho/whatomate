@@ -114,6 +114,26 @@ const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
 
+// ── Concluir / Reabrir atendimento ────────────────────────────────
+const isResolvingContact = ref(false)
+
+const isCurrentContactResolved = computed(
+  () => contactsStore.currentContact?.contact_status === 'resolved'
+)
+
+async function resolveContact() {
+  if (!contactsStore.currentContact || isResolvingContact.value) return
+  isResolvingContact.value = true
+  try {
+    const nextStatus = isCurrentContactResolved.value ? 'in_progress' : 'resolved'
+    await contactsStore.updateContactStatus(contactsStore.currentContact.id, nextStatus)
+  } catch {
+    // erro silencioso — o store já loga
+  } finally {
+    isResolvingContact.value = false
+  }
+}
+
 // ── Status tabs ──────────────────────────────────────────────
 type StatusTab = 'all' | 'new' | 'in_progress' | 'resolved'
 const STATUS_TABS: { key: StatusTab; label: string; icon: string }[] = [
@@ -1964,28 +1984,6 @@ async function sendMediaMessage() {
               </TooltipTrigger>
               <TooltipContent>{{ $t('chat.contactInfo') }}</TooltipContent>
             </Tooltip>
-            <!-- ✅ Botão: Concluir / Reabrir atendimento -->
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-8 w-8 transition-colors duration-200"
-                  :class="isCurrentContactResolved
-                    ? 'text-green-400 bg-green-500/10 hover:bg-green-500/20 light:text-green-600 light:bg-green-50 light:hover:bg-green-100'
-                    : 'text-white/50 hover:text-green-400 hover:bg-green-500/10 light:text-gray-500 light:hover:text-green-600 light:hover:bg-green-50'"
-                  :disabled="isResolvingContact"
-                  @click="resolveContact"
-                >
-                  <Loader2 v-if="isResolvingContact" class="h-4 w-4 animate-spin" />
-                  <CheckCircle v-else class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {{ isCurrentContactResolved ? 'Reabrir atendimento' : 'Concluir atendimento' }}
-              </TooltipContent>
-            </Tooltip>
-
             <Tooltip v-if="canAssignContacts">
               <TooltipTrigger as-child>
                 <Button
@@ -2026,6 +2024,27 @@ async function sendMediaMessage() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{{ $t('chat.resumeChatbot') }}</TooltipContent>
+            </Tooltip>
+            <!-- ✅ Botão: Concluir / Reabrir atendimento -->
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8 transition-colors duration-200"
+                  :class="isCurrentContactResolved
+                    ? 'text-green-400 bg-green-500/10 hover:bg-green-500/20 light:text-green-600 light:bg-green-50 light:hover:bg-green-100'
+                    : 'text-white/50 hover:text-green-400 hover:bg-green-500/10 light:text-gray-500 light:hover:text-green-600 light:hover:bg-green-50'"
+                  :disabled="isResolvingContact"
+                  @click="resolveContact"
+                >
+                  <Loader2 v-if="isResolvingContact" class="h-4 w-4 animate-spin" />
+                  <CheckCircle v-else class="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {{ isCurrentContactResolved ? 'Reabrir atendimento' : 'Concluir atendimento' }}
+              </TooltipContent>
             </Tooltip>
           </div>
         </div>
