@@ -21,6 +21,7 @@ export interface Contact {
   profile_name?: string
   avatar_url?: string
   status: string
+  contact_status: 'new' | 'in_progress' | 'resolved'
   tags: string[]
   metadata: Record<string, any>
   last_message_at?: string
@@ -345,6 +346,29 @@ export const useContactsStore = defineStore('contacts', () => {
     fetchContacts()
   }
 
+  async function updateContactStatus(
+    contactId: string,
+    status: 'new' | 'in_progress' | 'resolved'
+  ) {
+    try {
+      await contactsService.updateStatus(contactId, status)
+      // Atualizar localmente sem precisar de novo fetch
+      const contact = contacts.value.find(c => c.id === contactId)
+      if (contact) contact.contact_status = status
+      if (currentContact.value?.id === contactId) {
+        currentContact.value = { ...currentContact.value, contact_status: status }
+      }
+      // Se há filtro de status ativo, remover contato da lista atual
+      if (statusFilter.value !== 'all' && statusFilter.value !== status) {
+        contacts.value = contacts.value.filter(c => c.id !== contactId)
+        contactsTotal.value = Math.max(0, contactsTotal.value - 1)
+      }
+    } catch (error) {
+      console.error('Failed to update contact status:', error)
+      throw error
+    }
+  }
+
   function setAccountFilter(account: string | null) {
     accountFilter.value = account
   }
@@ -415,6 +439,7 @@ export const useContactsStore = defineStore('contacts', () => {
     clearMessages,
     statusFilter,
     setStatusFilter,
+    updateContactStatus,
     setAccountFilter,
     setReplyingTo,
     clearReplyingTo,
