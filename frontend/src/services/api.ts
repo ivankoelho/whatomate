@@ -475,7 +475,14 @@ export const cannedResponsesService = {
   update: (id: string, data: CannedResponseUpsertPayload) =>
     api.put(`/canned-responses/${id}`, data),
   delete: (id: string) => api.delete(`/canned-responses/${id}`),
-  use: (id: string) => api.post(`/canned-responses/${id}/use`)
+  use: (id: string) => api.post(`/canned-responses/${id}/use`),
+  // Export / Import — backend: POST /api/teams-canned/export | /import
+  exportAll: () =>
+    api.post('/teams-canned/export', {}, { responseType: 'text' }),
+  importAll: (jsonContent: string) =>
+    api.post('/teams-canned/import', jsonContent, {
+      headers: { 'Content-Type': 'application/json' }
+    })
 }
 
 export const agentAnalyticsService = {
@@ -840,7 +847,7 @@ export const teamsService = {
     api.delete(`/teams/${teamId}/members/${userId}`),
   // Export / Import — backend: POST /api/teams-canned/export | /import
   exportAll: () =>
-    api.post('/teams-canned/export', {}, { responseType: 'blob' }),
+    api.post('/teams-canned/export', {}, { responseType: 'text' }),
   importAll: (jsonContent: string) =>
     api.post('/teams-canned/import', jsonContent, {
       headers: { 'Content-Type': 'application/json' }
