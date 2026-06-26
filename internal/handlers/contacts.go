@@ -30,7 +30,6 @@ type ContactResponse struct {
 	ProfileName        string     `json:"profile_name"`
 	AvatarURL          string     `json:"avatar_url"`
 	Status             string     `json:"status"`
-	ContactStatus      string     `json:"contact_status"`
 	Tags               []string   `json:"tags"`
 	Metadata           any        `json:"metadata"`
 	LastMessageAt      *time.Time `json:"last_message_at"`
@@ -1606,4 +1605,56 @@ func (a *App) buildContactResponse(contact *models.Contact, orgID uuid.UUID) Con
 		CreatedAt:          contact.CreatedAt,
 		UpdatedAt:          contact.UpdatedAt,
 	}
+}
+
+// UpdateContactStatus updates the conversation status of a contact
+func (a *App) UpdateContactStatus(r *fastglue.Request) error {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	contactID, err := parsePathUUID(r, "id", "contact")
+	if err != nil {
+		return nil
+	}
+
+	var body struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(r.RequestCtx.PostBody(), &body); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid request body", nil, "")
+	}
+
+	// Validate status value
+	switch models.ContactStatus(body.Status) {
+	case models.ContactStatusNew, models.ContactStatusInProgress, models.ContactStatusResolved:
+		// valid
+	default:
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Invalid status. Use: new, in_progress, resolved", nil, "")
+	}
+
+	// Fetch and scope contact to org
+	var contact models.Contact
+	if err := a.ScopeToOrg(a.DB, userID, orgID).
+		Where("id = ?", contactID).
+		First(&contact).Error; err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusNotFound, "Contact not found", nil, "")
+	}
+
+	// Update status
+	if err := a.DB.Model(&contact).Update("status", body.Status).Error; err != nil {
+		a.Log.Error("Failed to update contact status", "error", err)
+		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update status", nil, "")
+	}
+
+	a.logAudit(orgID, userID, "contact", contactID, models.AuditActionUpdated, nil, map[string]any{
+		"status": body.Status,
+	})
+
+	return r.SendEnvelope(map[string]any{
+		"id":             contactID,
+		"contact_status": body.Status,
+		"message":        "Status updated successfully",
+	})
 }
