@@ -740,7 +740,6 @@ export const organizationService = {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  delete: (id: string) => api.delete(`/organizations/${id}`),
 }
 
 // Organizations
