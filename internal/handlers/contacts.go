@@ -1672,9 +1672,9 @@ func (a *App) UpdateContactStatus(r *fastglue.Request) error {
 
 	// BUG-2: Broadcast status change para todos os agentes conectados
 	if a.WSHub != nil {
-		a.WSHub.BroadcastToOrg(orgID, map[string]any{
-			"type": "contact_status_changed",
-			"payload": map[string]any{
+		a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+			Type: "contact_status_changed",
+			Payload: map[string]any{
 				"contact_id":     contactID,
 				"contact_status": body.Status,
 			},
