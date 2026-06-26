@@ -723,6 +723,7 @@ export const organizationService = {
     timezone?: string
     date_format?: string
     name?: string
+    logo_base64?: string
     calling_enabled?: boolean
     max_call_duration?: number
     transfer_timeout_secs?: number
@@ -738,7 +739,8 @@ export const organizationService = {
     return api.post(`/org/audio?type=${type}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-  }
+  },
+  delete: (id: string) => api.delete(`/org/${id}`),
 }
 
 // Organizations
