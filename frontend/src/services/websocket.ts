@@ -240,6 +240,9 @@ class WebSocketService {
         case WS_TYPE_CONVERSATION_NOTE_DELETED:
           useNotesStore().onNoteDeleted(message.payload.id)
           break
+        case 'contact_status_changed':
+          this.handleContactStatusChanged(store, message.payload)
+          break
         default:
           // Unknown message type, ignore
           break
@@ -338,6 +341,22 @@ class WebSocketService {
 
   private handleStatusUpdate(store: ReturnType<typeof useContactsStore>, payload: any) {
     store.updateMessageStatus(payload.message_id, payload.status, payload.error_message)
+  }
+
+  // BUG-5: Atualiza contact_status em tempo real via WebSocket broadcast
+  private handleContactStatusChanged(store: ReturnType<typeof useContactsStore>, payload: any) {
+    if (!payload?.contact_id || !payload?.contact_status) return
+    const contact = store.contacts.find(c => c.id === payload.contact_id)
+    if (contact) {
+      contact.contact_status = payload.contact_status
+      // Remover da lista se o filtro de status não bater
+      if (store.statusFilter !== 'all' && store.statusFilter !== payload.contact_status) {
+        store.contacts.splice(store.contacts.indexOf(contact), 1)
+      }
+    }
+    if (store.currentContact?.id === payload.contact_id) {
+      store.currentContact = { ...store.currentContact, contact_status: payload.contact_status }
+    }
   }
 
   private handleReactionUpdate(store: ReturnType<typeof useContactsStore>, payload: any) {
