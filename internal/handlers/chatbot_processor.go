@@ -157,6 +157,23 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 
 	// Get or create contact (always do this for all incoming messages)
 	contact, isNewContact, err := contactutil.GetOrCreateContact(a.DB, account.OrganizationID, msg.From, profileName)
+
+	// BUG-4: Se o contato estava "resolved" e voltou a enviar mensagem, transitar para "in_progress"
+	// (isNewContact é false quando o contato já existia no banco)
+	if !isNewContact && contact.ContactStatus == models.ContactStatusResolved {
+		if dbErr := a.DB.Model(&contact).Update("contact_status", string(models.ContactStatusInProgress)).Error; dbErr == nil {
+			contact.ContactStatus = models.ContactStatusInProgress
+			if a.WSHub != nil {
+				a.WSHub.BroadcastToOrg(account.OrganizationID, map[string]any{
+					"type": "contact_status_changed",
+					"payload": map[string]any{
+						"contact_id":     contact.ID,
+						"contact_status": string(models.ContactStatusInProgress),
+					},
+				})
+			}
+		}
+	}
 	if err != nil {
 		a.Log.Error("Failed to get or create contact", "from", msg.From, "error", err)
 		return
