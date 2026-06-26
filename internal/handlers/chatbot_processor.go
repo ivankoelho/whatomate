@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shridarpatil/whatomate/internal/contactutil"
 	"github.com/shridarpatil/whatomate/internal/models"
+	"github.com/shridarpatil/whatomate/internal/websocket"
 	"github.com/shridarpatil/whatomate/pkg/whatsapp"
 )
 
@@ -164,9 +165,9 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		if dbErr := a.DB.Model(&contact).Update("contact_status", string(models.ContactStatusInProgress)).Error; dbErr == nil {
 			contact.ContactStatus = models.ContactStatusInProgress
 			if a.WSHub != nil {
-				a.WSHub.BroadcastToOrg(account.OrganizationID, websocket.WSMessage{
-					Type: "contact_status_changed",
-					Payload: map[string]any{
+				a.WSHub.BroadcastToOrg(account.OrganizationID, map[string]any{
+					"type": "contact_status_changed",
+					"payload": map[string]any{
 						"contact_id":     contact.ID,
 						"contact_status": string(models.ContactStatusInProgress),
 					},
