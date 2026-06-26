@@ -26,6 +26,7 @@ export interface Contact {
   metadata: Record<string, any>
   last_message_at?: string
   last_inbound_at?: string
+  last_message_preview?: string
   service_window_open?: boolean
   unread_count: number
   assigned_user_id?: string
@@ -293,6 +294,28 @@ export const useContactsStore = defineStore('contacts', () => {
     replyingTo.value = null
   }
 
+  // FIX-4: gera prévia legível da mensagem para a sidebar
+  function buildMessagePreview(message: Message): string {
+    const dir = message.direction === 'outgoing' ? '↩ ' : ''
+    switch (message.message_type) {
+      case 'image':    return dir + '📷 Imagem'
+      case 'video':    return dir + '🎬 Vídeo'
+      case 'audio':    return dir + '🎤 Áudio'
+      case 'document': return dir + '📎 Documento'
+      case 'sticker':  return dir + '😀 Sticker'
+      case 'template': return dir + '📋 Template'
+      case 'location': return dir + '📍 Localização'
+      default:
+        if (message.content) {
+          const text = typeof message.content === 'string'
+            ? message.content
+            : (message.content as any)?.text || ''
+          return dir + text.slice(0, 60)
+        }
+        return dir + '...'
+    }
+  }
+
   function addMessage(message: Message) {
     // Update contact metadata regardless of account filter
     const contact = contacts.value.find(c => c.id === message.contact_id)
@@ -302,20 +325,12 @@ export const useContactsStore = defineStore('contacts', () => {
         contact.unread_count++
         contact.last_inbound_at = message.created_at
         contact.service_window_open = true
-        // FIX-1: auto-transição new → in_progress ao receber mensagem
-        if (contact.contact_status === 'new') {
-          contact.contact_status = 'in_progress'
-          updateContactStatus(contact.id, 'in_progress')
-        }
       }
     }
     // Also update currentContact if it matches
     if (currentContact.value && currentContact.value.id === message.contact_id && message.direction === 'incoming') {
       currentContact.value.last_inbound_at = message.created_at
       currentContact.value.service_window_open = true
-      if (currentContact.value.contact_status === 'new') {
-        currentContact.value.contact_status = 'in_progress'
-      }
     }
 
     // Skip adding to messages array if account filter is active and doesn't match
