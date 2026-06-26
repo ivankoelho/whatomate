@@ -30,6 +30,7 @@ type ContactResponse struct {
 	ProfileName        string     `json:"profile_name"`
 	AvatarURL          string     `json:"avatar_url"`
 	Status             string     `json:"status"`
+	ContactStatus      string     `json:"contact_status"`
 	Tags               []string   `json:"tags"`
 	Metadata           any        `json:"metadata"`
 	LastMessageAt      *time.Time `json:"last_message_at"`
