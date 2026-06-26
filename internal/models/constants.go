@@ -223,3 +223,12 @@ const (
 	ActionTypeURL        ActionType = "url"
 	ActionTypeJavascript ActionType = "javascript"
 )
+
+// ContactStatus represents the conversation status of a contact
+type ContactStatus string
+
+const (
+	ContactStatusNew        ContactStatus = "new"
+	ContactStatusInProgress ContactStatus = "in_progress"
+	ContactStatusResolved   ContactStatus = "resolved"
+)
