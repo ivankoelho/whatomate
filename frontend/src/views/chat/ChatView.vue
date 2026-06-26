@@ -127,6 +127,26 @@ function setStatusTab(tab: StatusTab) {
 }
 const isTransferring = ref(false)
 const isResuming = ref(false)
+const isResolvingContact = ref(false)
+
+// Computed: is the current contact already resolved?
+const isCurrentContactResolved = computed(() =>
+  contactsStore.currentContact?.contact_status === 'resolved'
+)
+
+async function resolveContact() {
+  if (!contactsStore.currentContact) return
+  isResolvingContact.value = true
+  try {
+    const newStatus = isCurrentContactResolved.value ? 'in_progress' : 'resolved'
+    await contactsStore.updateContactStatus(contactsStore.currentContact.id, newStatus)
+    toast.success(newStatus === 'resolved' ? 'Atendimento concluído' : 'Atendimento reaberto')
+  } catch {
+    toast.error('Erro ao atualizar status do atendimento')
+  } finally {
+    isResolvingContact.value = false
+  }
+}
 // Tracks incoming messages that arrived while the chat is open.
 // Surfaced as a "N unread messages" pill at the top of the chat panel
 // (WhatsApp-style). Click the pill to jump up to the first message of
@@ -1933,6 +1953,29 @@ async function sendMediaMessage() {
               </TooltipTrigger>
               <TooltipContent>{{ $t('chat.contactInfo') }}</TooltipContent>
             </Tooltip>
+            <!-- Resolve / Reopen button -->
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8 transition-colors"
+                  :class="isCurrentContactResolved
+                    ? 'text-green-400 hover:text-white hover:bg-white/[0.08] light:text-green-600 light:hover:text-gray-900 light:hover:bg-gray-100'
+                    : 'text-white/50 hover:text-green-400 hover:bg-green-500/10 light:text-gray-500 light:hover:text-green-600 light:hover:bg-green-50'"
+                  :disabled="isResolvingContact"
+                  @click="resolveContact"
+                >
+                  <Loader2 v-if="isResolvingContact" class="h-4 w-4 animate-spin" />
+                  <CheckCircle v-else-if="isCurrentContactResolved" class="h-4 w-4" />
+                  <CheckCircle v-else class="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {{ isCurrentContactResolved ? 'Reabrir atendimento' : 'Concluir atendimento' }}
+              </TooltipContent>
+            </Tooltip>
+
             <Tooltip v-if="canAssignContacts">
               <TooltipTrigger as-child>
                 <Button
