@@ -14,8 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { PageHeader, AuditLogPanel } from '@/components/shared'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { toast } from 'vue-sonner'
-import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music, MessageSquare, X as XIcon, TriangleAlert, Trash2 } from 'lucide-vue-next'
-import { usersService, organizationService, organizationsService } from '@/services/api'
+import { Settings, Bell, Loader2, Globe, Phone, Upload, Play, Pause, Music, MessageSquare, X as XIcon, AlertTriangle, Trash2 } from 'lucide-vue-next'
+import { usersService, organizationService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
@@ -46,9 +46,8 @@ async function deleteOrganization() {
   if (!deleteConfirmMatch.value || !orgID.value) return
   isDeletingOrg.value = true
   try {
-    await organizationsService.delete(orgID.value)
+    await organizationService.delete(orgID.value)
     toast.success('Organização deletada com sucesso.')
-    // Limpa sessão e redireciona para login
     authStore.logout()
     router.push('/auth/login')
   } catch (err: any) {
@@ -323,11 +322,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
               <div class="p-6 pt-3 space-y-4">
                 <div class="space-y-2">
                   <Label for="org_name" class="text-white/70 light:text-gray-700">{{ $t('settings.organizationName') }}</Label>
-                  <Input
-                    id="org_name"
-                    v-model="generalSettings.organization_name"
-                    :placeholder="$t('settings.organizationPlaceholder')"
-                  />
+                  <Input id="org_name" v-model="generalSettings.organization_name" :placeholder="$t('settings.organizationPlaceholder')" />
                 </div>
                 <!-- Logo Upload -->
                 <div class="space-y-2">
@@ -398,10 +393,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     <p class="font-medium text-white light:text-gray-900">{{ $t('settings.maskPhoneNumbers') }}</p>
                     <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.maskPhoneNumbersDesc') }}</p>
                   </div>
-                  <Switch
-                    :checked="generalSettings.mask_phone_numbers"
-                    @update:checked="generalSettings.mask_phone_numbers = $event"
-                  />
+                  <Switch :checked="generalSettings.mask_phone_numbers" @update:checked="generalSettings.mask_phone_numbers = $event" />
                 </div>
                 <div class="flex justify-end">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveGeneralSettings" :disabled="isSubmitting">
@@ -422,29 +414,16 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                 <div class="grid grid-cols-2 gap-4">
                   <div class="space-y-2">
                     <Label for="meta_app_id" class="text-white/70 light:text-gray-700">{{ $t('settings.metaAppId') }}</Label>
-                    <Input
-                      id="meta_app_id"
-                      v-model="generalSettings.meta_app_id"
-                      placeholder="e.g. 123456789012345"
-                    />
+                    <Input id="meta_app_id" v-model="generalSettings.meta_app_id" placeholder="e.g. 123456789012345" />
                   </div>
                   <div class="space-y-2">
                     <Label for="meta_config_id" class="text-white/70 light:text-gray-700">{{ $t('settings.metaConfigId') }}</Label>
-                    <Input
-                      id="meta_config_id"
-                      v-model="generalSettings.meta_config_id"
-                      placeholder="e.g. 987654321098765"
-                    />
+                    <Input id="meta_config_id" v-model="generalSettings.meta_config_id" placeholder="e.g. 987654321098765" />
                   </div>
                 </div>
                 <div class="space-y-2">
                   <Label for="meta_app_secret" class="text-white/70 light:text-gray-700">{{ $t('settings.metaAppSecret') }}</Label>
-                  <Input
-                    id="meta_app_secret"
-                    type="password"
-                    v-model="generalSettings.meta_app_secret"
-                    :placeholder="generalSettings.has_meta_app_secret ? '••••••••••••' : 'Enter Meta App Secret'"
-                  />
+                  <Input id="meta_app_secret" type="password" v-model="generalSettings.meta_app_secret" :placeholder="generalSettings.has_meta_app_secret ? '••••••••••••' : 'Enter Meta App Secret'" />
                 </div>
                 <div class="flex justify-end">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveGeneralSettings" :disabled="isSubmitting">
@@ -455,10 +434,10 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
               </div>
             </div>
 
-            <!-- ── Danger Zone (apenas super-admin) ─────────────────────── -->
+            <!-- ── Danger Zone (apenas super-admin) ────────────────────── -->
             <div v-if="isSuperAdmin" class="mt-6 rounded-xl border border-red-500/30 bg-red-500/[0.04] light:bg-red-50 light:border-red-200">
               <div class="p-6 pb-3 flex items-center gap-3">
-                <TriangleAlert class="h-5 w-5 text-red-500 shrink-0" />
+                <AlertTriangle class="h-5 w-5 text-red-500 shrink-0" />
                 <div>
                   <h3 class="text-lg font-semibold text-red-400 light:text-red-600">Zona de Perigo</h3>
                   <p class="text-sm text-red-400/60 light:text-red-500/70">Ações irreversíveis. Proceda com extremo cuidado.</p>
@@ -469,7 +448,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                   <div>
                     <p class="font-medium text-white light:text-gray-900">Deletar esta organização</p>
                     <p class="text-sm text-white/40 light:text-gray-500">
-                      Remove permanentemente a organização, todos os usuários, fluxos, contatos e dados associados.
+                      Remove permanentemente a organização e todos os dados associados.
                       Esta ação <span class="font-semibold text-red-400">não pode ser desfeita</span>.
                     </p>
                   </div>
@@ -504,10 +483,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     <p class="font-medium text-white light:text-gray-900">{{ $t('settings.emailNotifications') }}</p>
                     <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.emailNotificationsDesc') }}</p>
                   </div>
-                  <Switch
-                    :checked="notificationSettings.email_notifications"
-                    @update:checked="notificationSettings.email_notifications = $event"
-                  />
+                  <Switch :checked="notificationSettings.email_notifications" @update:checked="notificationSettings.email_notifications = $event" />
                 </div>
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
                 <div class="flex items-center justify-between">
@@ -515,10 +491,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     <p class="font-medium text-white light:text-gray-900">{{ $t('settings.newMessageAlerts') }}</p>
                     <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.newMessageAlertsDesc') }}</p>
                   </div>
-                  <Switch
-                    :checked="notificationSettings.new_message_alerts"
-                    @update:checked="notificationSettings.new_message_alerts = $event"
-                  />
+                  <Switch :checked="notificationSettings.new_message_alerts" @update:checked="notificationSettings.new_message_alerts = $event" />
                 </div>
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
                 <div class="flex items-center justify-between">
@@ -526,10 +499,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     <p class="font-medium text-white light:text-gray-900">{{ $t('settings.campaignUpdates') }}</p>
                     <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.campaignUpdatesDesc') }}</p>
                   </div>
-                  <Switch
-                    :checked="notificationSettings.campaign_updates"
-                    @update:checked="notificationSettings.campaign_updates = $event"
-                  />
+                  <Switch :checked="notificationSettings.campaign_updates" @update:checked="notificationSettings.campaign_updates = $event" />
                 </div>
                 <div class="flex justify-end pt-4">
                   <Button variant="outline" size="sm" class="bg-white/[0.04] border-white/[0.1] text-white/70 hover:bg-white/[0.08] hover:text-white light:bg-white light:border-gray-200 light:text-gray-700 light:hover:bg-gray-50" @click="saveNotificationSettings" :disabled="isSubmitting">
@@ -557,38 +527,23 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     <p class="font-medium text-white light:text-gray-900">{{ $t('settings.callingEnabled') }}</p>
                     <p class="text-sm text-white/40 light:text-gray-500">{{ $t('settings.callingEnabledDesc') }}</p>
                   </div>
-                  <Switch
-                    :checked="callingSettings.calling_enabled"
-                    @update:checked="callingSettings.calling_enabled = $event"
-                  />
+                  <Switch :checked="callingSettings.calling_enabled" @update:checked="callingSettings.calling_enabled = $event" />
                 </div>
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
                 <div class="grid grid-cols-2 gap-4" :class="{ 'opacity-50 pointer-events-none': !callingSettings.calling_enabled }">
                   <div class="space-y-2">
                     <Label for="max_call_duration" class="text-white/70 light:text-gray-700">{{ $t('settings.maxCallDuration') }}</Label>
-                    <Input
-                      id="max_call_duration"
-                      type="number"
-                      v-model.number="callingSettings.max_call_duration"
-                      :min="60"
-                      :max="3600"
-                    />
+                    <Input id="max_call_duration" type="number" v-model.number="callingSettings.max_call_duration" :min="60" :max="3600" />
                     <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.maxCallDurationDesc') }}</p>
                   </div>
                   <div class="space-y-2">
                     <Label for="transfer_timeout" class="text-white/70 light:text-gray-700">{{ $t('settings.transferTimeout') }}</Label>
-                    <Input
-                      id="transfer_timeout"
-                      type="number"
-                      v-model.number="callingSettings.transfer_timeout_secs"
-                      :min="30"
-                      :max="600"
-                    />
+                    <Input id="transfer_timeout" type="number" v-model.number="callingSettings.transfer_timeout_secs" :min="30" :max="600" />
                     <p class="text-xs text-white/40 light:text-gray-500">{{ $t('settings.transferTimeoutDesc') }}</p>
                   </div>
                 </div>
                 <Separator class="bg-white/[0.08] light:bg-gray-200" />
-                <!-- Hold Music Upload -->
+                <!-- Hold Music -->
                 <div class="space-y-3" :class="{ 'opacity-50 pointer-events-none': !callingSettings.calling_enabled }">
                   <div>
                     <Label class="text-white/70 light:text-gray-700 flex items-center gap-2">
@@ -601,13 +556,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     <span class="text-sm text-white/50 light:text-gray-500">
                       {{ callingSettings.hold_music_file ? `${$t('settings.currentFile')}: ${callingSettings.hold_music_file}` : $t('settings.noFileUploaded') }}
                     </span>
-                    <Button
-                      v-if="callingSettings.hold_music_file"
-                      variant="ghost"
-                      size="sm"
-                      class="h-8 w-8 p-0 text-white/50 hover:text-white light:text-gray-500 light:hover:text-gray-900"
-                      @click="togglePlayAudio('hold_music')"
-                    >
+                    <Button v-if="callingSettings.hold_music_file" variant="ghost" size="sm" class="h-8 w-8 p-0 text-white/50 hover:text-white light:text-gray-500 light:hover:text-gray-900" @click="togglePlayAudio('hold_music')">
                       <Pause v-if="playingHoldMusic" class="h-4 w-4" />
                       <Play v-else class="h-4 w-4" />
                     </Button>
@@ -622,7 +571,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     <span class="text-xs text-white/30 light:text-gray-400">.ogg, .opus, .mp3, .wav (max 5MB)</span>
                   </div>
                 </div>
-                <!-- Ringback Tone Upload -->
+                <!-- Ringback -->
                 <div class="space-y-3" :class="{ 'opacity-50 pointer-events-none': !callingSettings.calling_enabled }">
                   <div>
                     <Label class="text-white/70 light:text-gray-700 flex items-center gap-2">
@@ -635,13 +584,7 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
                     <span class="text-sm text-white/50 light:text-gray-500">
                       {{ callingSettings.ringback_file ? `${$t('settings.currentFile')}: ${callingSettings.ringback_file}` : $t('settings.noFileUploaded') }}
                     </span>
-                    <Button
-                      v-if="callingSettings.ringback_file"
-                      variant="ghost"
-                      size="sm"
-                      class="h-8 w-8 p-0 text-white/50 hover:text-white light:text-gray-500 light:hover:text-gray-900"
-                      @click="togglePlayAudio('ringback')"
-                    >
+                    <Button v-if="callingSettings.ringback_file" variant="ghost" size="sm" class="h-8 w-8 p-0 text-white/50 hover:text-white light:text-gray-500 light:hover:text-gray-900" @click="togglePlayAudio('ringback')">
                       <Pause v-if="playingRingback" class="h-4 w-4" />
                       <Play v-else class="h-4 w-4" />
                     </Button>
@@ -672,13 +615,13 @@ function togglePlayAudio(type: 'hold_music' | 'ringback') {
       </div>
     </ScrollArea>
 
-    <!-- ── Modal de confirmação de exclusão da organização ──────────── -->
+    <!-- ── Modal de confirmação de exclusão ─────────────────────────── -->
     <Dialog :open="showDeleteOrgModal" @update:open="showDeleteOrgModal = $event">
       <DialogContent class="bg-[#141414] border border-red-500/30 text-white max-w-md light:bg-white light:text-gray-900">
         <DialogHeader>
           <div class="flex items-center gap-3 mb-1">
             <div class="h-10 w-10 rounded-full bg-red-500/15 flex items-center justify-center shrink-0">
-              <TriangleAlert class="h-5 w-5 text-red-500" />
+              <AlertTriangle class="h-5 w-5 text-red-500" />
             </div>
             <DialogTitle class="text-red-400 text-lg light:text-red-600">
               Deletar organização permanentemente
