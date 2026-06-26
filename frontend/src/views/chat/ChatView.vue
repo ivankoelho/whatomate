@@ -114,6 +114,31 @@ const messageInputRef = ref<HTMLTextAreaElement | null>(null)
 const isSending = ref(false)
 const isAssignDialogOpen = ref(false)
 
+// ── FIX-2: Concluir / Reabrir atendimento ─────────────────────
+const isResolvingContact = ref(false)
+const isCurrentContactResolved = computed(
+  () => contactsStore.currentContact?.contact_status === 'resolved'
+)
+
+async function resolveContact() {
+  const contact = contactsStore.currentContact
+  if (!contact || isResolvingContact.value) return
+  isResolvingContact.value = true
+  try {
+    const nextStatus = contact.contact_status === 'resolved' ? 'in_progress' : 'resolved'
+    await contactsStore.updateContactStatus(contact.id, nextStatus)
+    if (nextStatus === 'resolved') {
+      toast.success(t('chat.contactResolved', 'Atendimento concluído'))
+    } else {
+      toast.success(t('chat.contactReopened', 'Atendimento reaberto'))
+    }
+  } catch {
+    toast.error(t('chat.contactStatusError', 'Erro ao atualizar status'))
+  } finally {
+    isResolvingContact.value = false
+  }
+}
+
 // ── Status tabs ──────────────────────────────────────────────
 type StatusTab = 'all' | 'new' | 'in_progress' | 'resolved'
 const STATUS_TABS: { key: StatusTab; label: string; icon: string }[] = [
@@ -1933,6 +1958,19 @@ async function sendMediaMessage() {
               </TooltipTrigger>
               <TooltipContent>{{ $t('chat.contactInfo') }}</TooltipContent>
             </Tooltip>
+            <Tooltip v-if="canAssignContacts">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
+                  @click="isAssignDialogOpen = true"
+                >
+                  <UserPlus class="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{{ $t('chat.assignToAgent') }}</TooltipContent>
+            </Tooltip>
             <!-- ✅ Botão: Concluir / Reabrir atendimento -->
             <Tooltip>
               <TooltipTrigger as-child>
@@ -1953,20 +1991,6 @@ async function sendMediaMessage() {
               <TooltipContent>
                 {{ isCurrentContactResolved ? 'Reabrir atendimento' : 'Concluir atendimento' }}
               </TooltipContent>
-            </Tooltip>
-
-            <Tooltip v-if="canAssignContacts">
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-8 w-8 text-white/50 hover:text-white hover:bg-white/[0.08] light:text-gray-500 light:hover:text-gray-900 light:hover:bg-gray-100"
-                  @click="isAssignDialogOpen = true"
-                >
-                  <UserPlus class="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{{ $t('chat.assignToAgent') }}</TooltipContent>
             </Tooltip>
             <Tooltip v-if="!activeTransferId">
               <TooltipTrigger as-child>
