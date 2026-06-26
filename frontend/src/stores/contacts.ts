@@ -94,6 +94,7 @@ export const useContactsStore = defineStore('contacts', () => {
   const selectedTags = ref<string[]>([])
   const replyingTo = ref<Message | null>(null)
   const accountFilter = ref<string | null>(null)
+  const statusFilter = ref<'all' | 'new' | 'in_progress' | 'resolved'>('all')
 
   // Contacts pagination
   const contactsPage = ref(1)
@@ -114,14 +115,16 @@ export const useContactsStore = defineStore('contacts', () => {
     })
   })
 
-  async function fetchContacts(params?: { search?: string; page?: number; limit?: number; tags?: string }) {
+  async function fetchContacts(params?: { search?: string; page?: number; limit?: number; tags?: string; status?: string }) {
     isLoading.value = true
     try {
       const tagsParam = selectedTags.value.length > 0 ? selectedTags.value.join(',') : undefined
+      const statusParam = statusFilter.value !== 'all' ? statusFilter.value : undefined
       const response = await contactsService.list({
         page: 1,
         limit: contactsLimit.value,
         tags: tagsParam,
+        status: statusParam,
         ...params
       })
       // API returns { status: "success", data: { contacts: [...], total: number } }
@@ -144,11 +147,13 @@ export const useContactsStore = defineStore('contacts', () => {
       const nextPage = contactsPage.value + 1
       const tagsParam = selectedTags.value.length > 0 ? selectedTags.value.join(',') : undefined
       const search = normalizeContactSearch(searchQuery.value) || undefined
+      const statusParam = statusFilter.value !== 'all' ? statusFilter.value : undefined
       const response = await contactsService.list({
         page: nextPage,
         limit: contactsLimit.value,
         tags: tagsParam,
-        search
+        search,
+        status: statusParam,
       })
       const data = response.data.data || response.data
       const newContacts = data.contacts || []
@@ -335,6 +340,11 @@ export const useContactsStore = defineStore('contacts', () => {
     }
   }
 
+  function setStatusFilter(status: 'all' | 'new' | 'in_progress' | 'resolved') {
+    statusFilter.value = status
+    fetchContacts()
+  }
+
   function setAccountFilter(account: string | null) {
     accountFilter.value = account
   }
@@ -403,6 +413,8 @@ export const useContactsStore = defineStore('contacts', () => {
     updateMessageStatus,
     setCurrentContact,
     clearMessages,
+    statusFilter,
+    setStatusFilter,
     setAccountFilter,
     setReplyingTo,
     clearReplyingTo,
