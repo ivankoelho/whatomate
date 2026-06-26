@@ -103,14 +103,14 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	// or contacts with an active chat transfer to them
 	query = a.scopeAssignedContact(query, userID, orgID)
 
-	// Filter by conversation status
+	// Filter by conversation status (contact_status column)
 	switch statusFilter {
 	case "new":
-		query = query.Where("status = ?", "new")
+		query = query.Where("contact_status = ?", "new")
 	case "in_progress":
-		query = query.Where("status = ?", "in_progress")
+		query = query.Where("contact_status = ?", "in_progress")
 	case "resolved":
-		query = query.Where("status = ?", "resolved")
+		query = query.Where("contact_status = ?", "resolved")
 	// "all" or empty: no status filter
 	}
 
@@ -191,7 +191,8 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 			PhoneNumber:        phoneNumber,
 			Name:               profileName,
 			ProfileName:        profileName,
-			Status:             "active",
+			Status:             string(c.Status),
+			ContactStatus:      string(c.Status),
 			Tags:               tags,
 			Metadata:           c.Metadata,
 			LastMessageAt:      c.LastMessageAt,
