@@ -302,12 +302,20 @@ export const useContactsStore = defineStore('contacts', () => {
         contact.unread_count++
         contact.last_inbound_at = message.created_at
         contact.service_window_open = true
+        // FIX 1: auto-transição para in_progress ao receber mensagem
+        if (contact.contact_status === 'new') {
+          contact.contact_status = 'in_progress'
+          updateContactStatus(contact.id, 'in_progress')
+        }
       }
     }
     // Also update currentContact if it matches
     if (currentContact.value && currentContact.value.id === message.contact_id && message.direction === 'incoming') {
       currentContact.value.last_inbound_at = message.created_at
       currentContact.value.service_window_open = true
+      if (currentContact.value.contact_status === 'new') {
+        currentContact.value.contact_status = 'in_progress'
+      }
     }
 
     // Skip adding to messages array if account filter is active and doesn't match
