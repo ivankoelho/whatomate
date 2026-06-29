@@ -48,7 +48,7 @@ async function handleImport() {
   loading.value = true
   try {
     const res = await chatbotService.importChatbot(file.value)
-    const { flows_imported, keywords_imported } = res.data
+    const { flows_imported, keywords_imported } = res
     toast({
       title: 'Importação concluída!',
       description: `${flows_imported} fluxo(s) e ${keywords_imported} palavra(s)-chave importada(s).`,
