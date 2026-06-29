@@ -140,7 +140,7 @@ async function handleImport() {
   loading.value = true
   try {
     const res = await chatbotService.importChatbot(file.value)
-    const { flows_imported, keywords_imported } = (res.data as any).data ?? res.data
+    const { flows_imported, keywords_imported } = res
     toast.success(`Importado: ${flows_imported} fluxo(s) e ${keywords_imported} palavra(s)-chave`)
     emit('imported')
     emit('close')
