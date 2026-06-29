@@ -427,12 +427,18 @@ export const chatbotService = {
   // Export / Import
   exportChatbot: (data?: { flow_ids?: string[]; keyword_ids?: string[] }) =>
     api.post('/chatbot/export', data ?? {}, { responseType: 'blob' }),
-  importChatbot: (file: File) =>
-    api.post<{ flows_imported: number; keywords_imported: number; message: string }>(
-      '/chatbot/import',
-      file,
-      { headers: { 'Content-Type': 'application/json' }, transformRequest: [(_: any) => file.text()] },
-    ),
+  importChatbot: async (file: File): Promise<{
+    flows_imported: number
+    keywords_imported: number
+    message: string
+  }> => {
+    const text = await file.text()
+    const res = await api.post<{
+      data: { flows_imported: number; keywords_imported: number; message: string }
+    }>('/chatbot/import', text, { headers: { 'Content-Type': 'application/json' } })
+    // Desembrulha o envelope fastglue para simplificar todos os consumidores.
+    return res.data.data
+  },
 }
 
 export interface CannedResponseButton {
