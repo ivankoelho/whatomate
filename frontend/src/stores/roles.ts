@@ -7,6 +7,8 @@ export interface CreateRoleData {
   name: string
   description?: string
   is_default?: boolean
+  /** Restrict contact visibility to the user's own teams. */
+  scope_teams_only?: boolean
   permissions: string[]
 }
 
@@ -14,6 +16,8 @@ export interface UpdateRoleData {
   name?: string
   description?: string
   is_default?: boolean
+  /** Restrict contact visibility to the user's own teams. */
+  scope_teams_only?: boolean
   permissions?: string[]
 }
 
