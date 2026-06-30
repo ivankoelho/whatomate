@@ -24,6 +24,11 @@ type CustomRole struct {
 	Description    string       `gorm:"size:500" json:"description"`
 	IsSystem       bool         `gorm:"default:false" json:"is_system"`  // true for default admin/manager/agent
 	IsDefault      bool         `gorm:"default:false" json:"is_default"` // default role for new users in org
+	// ScopeTeamsOnly restricts contact visibility to contacts whose active
+	// AgentTransfer belongs to a team the user is a member of (or is directly
+	// assigned to them). When false (default) and the user has contacts:read,
+	// they see all contacts in the organisation (Admin/Manager behaviour).
+	ScopeTeamsOnly bool         `gorm:"default:false" json:"scope_teams_only"`
 	Permissions    []Permission `gorm:"many2many:role_permissions;" json:"permissions"`
 
 	// Relations
