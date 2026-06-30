@@ -457,11 +457,12 @@ func (a *App) getUserPermissionsCached(userID uuid.UUID, orgIDs ...uuid.UUID) (*
 
 	// Build permissions list
 	perms := UserPermissions{
-		RoleID:       role.ID,
-		RoleName:     role.Name,
-		IsSystem:     role.IsSystem,
-		IsSuperAdmin: user.IsSuperAdmin,
-		Permissions:  make([]string, 0, len(role.Permissions)),
+		RoleID:         role.ID,
+		RoleName:       role.Name,
+		IsSystem:       role.IsSystem,
+		IsSuperAdmin:   user.IsSuperAdmin,
+		ScopeTeamsOnly: role.ScopeTeamsOnly,
+		Permissions:    make([]string, 0, len(role.Permissions)),
 	}
 
 	for _, p := range role.Permissions {
