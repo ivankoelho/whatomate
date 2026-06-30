@@ -60,6 +60,7 @@ const form = ref({
   name: '',
   description: '',
   is_default: false,
+  scope_teams_only: false,
   permissions: [] as string[],
 })
 
@@ -90,6 +91,7 @@ function syncForm() {
     name: role.value.name,
     description: role.value.description || '',
     is_default: role.value.is_default,
+    scope_teams_only: role.value.scope_teams_only ?? false,
     permissions: [...role.value.permissions],
   }
 }
@@ -111,6 +113,7 @@ async function save() {
         name: form.value.name,
         description: form.value.description,
         is_default: form.value.is_default,
+        scope_teams_only: form.value.scope_teams_only,
         permissions: form.value.permissions,
       })
       hasChanges.value = false
@@ -121,6 +124,7 @@ async function save() {
         name: form.value.name,
         description: form.value.description,
         is_default: form.value.is_default,
+        scope_teams_only: form.value.scope_teams_only,
         permissions: form.value.permissions,
       })
       await loadRole()
@@ -219,6 +223,23 @@ onMounted(async () => {
               <p class="text-[11px] text-muted-foreground">{{ $t('roles.defaultRoleDesc') }}</p>
             </div>
             <Switch :checked="form.is_default" @update:checked="form.is_default = $event" :disabled="!canEditForm" />
+          </div>
+          <!-- Scope Teams Only toggle — visible only on custom roles with contacts:read -->
+          <div v-if="!isSystem && form.permissions.includes('contacts:read')" class="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2.5">
+            <div class="space-y-0.5">
+              <Label class="text-xs font-medium cursor-pointer text-amber-900 dark:text-amber-200">
+                Restringir visibilidade ao time
+              </Label>
+              <p class="text-[11px] text-amber-700 dark:text-amber-400">
+                Usuários com este perfil verão apenas conversas direcionadas ao seu departamento, não todas as mensagens da organização.
+              </p>
+            </div>
+            <Switch
+              :checked="form.scope_teams_only"
+              @update:checked="form.scope_teams_only = $event"
+              :disabled="!canEditForm"
+              class="ml-4 shrink-0"
+            />
           </div>
         </CardContent>
       </Card>
