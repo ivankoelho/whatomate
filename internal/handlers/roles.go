@@ -21,33 +21,39 @@ func roleAuditSnapshot(role *models.CustomRole) map[string]any {
 	}
 	sort.Strings(perms)
 	return map[string]any{
-		"name":        role.Name,
-		"description": role.Description,
-		"is_default":  role.IsDefault,
-		"is_system":   role.IsSystem,
-		"permissions": perms,
+		"name":             role.Name,
+		"description":      role.Description,
+		"is_default":       role.IsDefault,
+		"is_system":        role.IsSystem,
+		"scope_teams_only": role.ScopeTeamsOnly,
+		"permissions":      perms,
 	}
 }
 
 // RoleRequest represents the request body for creating/updating a role
 type RoleRequest struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	IsDefault   bool     `json:"is_default"`
-	Permissions []string `json:"permissions"` // Format: ["resource:action", ...]
+	Name           string   `json:"name"`
+	Description    string   `json:"description"`
+	IsDefault      bool     `json:"is_default"`
+	// ScopeTeamsOnly restricts contacts visibility for users with this role to
+	// their own team's conversations (AgentTransfer.TeamID) even when they have
+	// contacts:read. Set to false (default) for full org visibility.
+	ScopeTeamsOnly bool     `json:"scope_teams_only"`
+	Permissions    []string `json:"permissions"` // Format: ["resource:action", ...]
 }
 
 // RoleResponse represents the response for a role
 type RoleResponse struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	IsSystem    bool      `json:"is_system"`
-	IsDefault   bool      `json:"is_default"`
-	Permissions []string  `json:"permissions"`
-	UserCount   int64     `json:"user_count"`
-	CreatedAt   string    `json:"created_at"`
-	UpdatedAt   string    `json:"updated_at"`
+	ID             uuid.UUID `json:"id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	IsSystem       bool      `json:"is_system"`
+	IsDefault      bool      `json:"is_default"`
+	ScopeTeamsOnly bool      `json:"scope_teams_only"`
+	Permissions    []string  `json:"permissions"`
+	UserCount      int64     `json:"user_count"`
+	CreatedAt      string    `json:"created_at"`
+	UpdatedAt      string    `json:"updated_at"`
 }
 
 // PermissionResponse represents a permission in the API
@@ -173,6 +179,7 @@ func (a *App) CreateRole(r *fastglue.Request) error {
 		Description:    req.Description,
 		IsSystem:       false,
 		IsDefault:      req.IsDefault,
+		ScopeTeamsOnly: req.ScopeTeamsOnly,
 		Permissions:    permissions,
 	}
 
@@ -285,6 +292,8 @@ func (a *App) UpdateRole(r *fastglue.Request) error {
 	if req.Description != "" {
 		role.Description = req.Description
 	}
+	// Always update ScopeTeamsOnly (bool — zero value is valid "false")
+	role.ScopeTeamsOnly = req.ScopeTeamsOnly
 
 	// Update permissions if provided
 	if len(req.Permissions) > 0 {
@@ -411,15 +420,16 @@ func roleToResponse(role models.CustomRole, userCount int64) RoleResponse {
 	}
 
 	return RoleResponse{
-		ID:          role.ID,
-		Name:        role.Name,
-		Description: role.Description,
-		IsSystem:    role.IsSystem,
-		IsDefault:   role.IsDefault,
-		Permissions: permissions,
-		UserCount:   userCount,
-		CreatedAt:   role.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:   role.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		ID:             role.ID,
+		Name:           role.Name,
+		Description:    role.Description,
+		IsSystem:       role.IsSystem,
+		IsDefault:      role.IsDefault,
+		ScopeTeamsOnly: role.ScopeTeamsOnly,
+		Permissions:    permissions,
+		UserCount:      userCount,
+		CreatedAt:      role.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:      role.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 }
 
