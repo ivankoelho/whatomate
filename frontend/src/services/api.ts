@@ -990,6 +990,8 @@ export interface Role {
   description: string
   is_system: boolean
   is_default: boolean
+  /** When true, users with this role only see contacts belonging to their teams. */
+  scope_teams_only: boolean
   permissions: string[] // ["resource:action", ...]
   user_count: number
   created_at: string
@@ -1000,9 +1002,9 @@ export const rolesService = {
   list: (params?: { search?: string; page?: number; limit?: number }) =>
     api.get<{ roles: Role[] }>('/roles', { params }),
   get: (id: string) => api.get<Role>(`/roles/${id}`),
-  create: (data: { name: string; description?: string; is_default?: boolean; permissions: string[] }) =>
+  create: (data: { name: string; description?: string; is_default?: boolean; scope_teams_only?: boolean; permissions: string[] }) =>
     api.post<Role>('/roles', data),
-  update: (id: string, data: { name?: string; description?: string; is_default?: boolean; permissions?: string[] }) =>
+  update: (id: string, data: { name?: string; description?: string; is_default?: boolean; scope_teams_only?: boolean; permissions?: string[] }) =>
     api.put<Role>(`/roles/${id}`, data),
   delete: (id: string) => api.delete(`/roles/${id}`)
 }
