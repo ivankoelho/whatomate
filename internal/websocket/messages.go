@@ -26,6 +26,12 @@ const (
 	TypeTransferExpired     = "transfer_expired"
 	TypeTransferEscalated   = "transfer_escalated"
 
+	// Typing indicator
+	// TypeAgentTyping is broadcast to all agents viewing the same contact when
+	// an agent starts typing. The payload contains contact_id, user_id, and
+	// user_name. The frontend clears the indicator after 3 s of silence.
+	TypeAgentTyping = "agent_typing"
+
 	// Campaign types
 	TypeCampaignStatsUpdate = "campaign_stats_update"
 
