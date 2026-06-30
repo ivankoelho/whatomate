@@ -387,11 +387,15 @@ func (a *App) InvalidateAIContextsCache(orgID uuid.UUID) {
 
 // UserPermissions represents cached user permissions
 type UserPermissions struct {
-	RoleID       uuid.UUID `json:"role_id"`
-	RoleName     string    `json:"role_name"`
-	IsSystem     bool      `json:"is_system"`
-	IsSuperAdmin bool      `json:"is_super_admin"`
-	Permissions  []string  `json:"permissions"` // Format: "resource:action"
+	RoleID         uuid.UUID `json:"role_id"`
+	RoleName       string    `json:"role_name"`
+	IsSystem       bool      `json:"is_system"`
+	IsSuperAdmin   bool      `json:"is_super_admin"`
+	// ScopeTeamsOnly mirrors CustomRole.ScopeTeamsOnly — when true, contact
+	// visibility is restricted to contacts whose active AgentTransfer belongs
+	// to a team the user is a member of (or is directly assigned to them).
+	ScopeTeamsOnly bool      `json:"scope_teams_only"`
+	Permissions    []string  `json:"permissions"` // Format: "resource:action"
 }
 
 // getUserPermissionsCached retrieves user permissions from cache or database.
