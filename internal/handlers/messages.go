@@ -506,6 +506,8 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 		"interactive_data": msg.InteractiveData,
 		"status":           msg.Status,
 		"wamid":            msg.WhatsAppMessageID,
+		"sent_by_user_id":  sentByUserIDStr(msg),
+		"sent_by_user_name": a.sentByUserName(msg),
 		"created_at":       msg.CreatedAt,
 		"updated_at":       msg.UpdatedAt,
 		"is_reply":         msg.IsReply,
@@ -536,6 +538,63 @@ func (a *App) broadcastNewMessage(orgID uuid.UUID, msg *models.Message, contact 
 		Type:    websocket.TypeNewMessage,
 		Payload: payload,
 	})
+}
+
+// sentByUserIDStr returns the SentByUserID as string or empty string.
+func sentByUserIDStr(msg *models.Message) string {
+	if msg.SentByUserID == nil {
+		return ""
+	}
+	return msg.SentByUserID.String()
+}
+
+// sentByUserName resolves the full name of the agent who sent the message.
+// Returns empty string for chatbot / incoming messages.
+func (a *App) sentByUserName(msg *models.Message) string {
+	if msg.SentByUserID == nil {
+		return ""
+	}
+	var user models.User
+	if err := a.DB.Select("full_name").First(&user, msg.SentByUserID).Error; err != nil {
+		return ""
+	}
+	return user.FullName
+}
+
+// BroadcastAgentTyping broadcasts an agent_typing event to all agents in the org
+// who are viewing the same contact. Called by the POST /api/contacts/{id}/typing endpoint.
+func (a *App) BroadcastAgentTyping(r *fastglue.Request) error {
+	orgID, userID, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	contactID, err := parsePathUUID(r, "id", "contact")
+	if err != nil {
+		return nil
+	}
+
+	if a.WSHub == nil {
+		return r.SendEnvelope(map[string]string{"ok": "true"})
+	}
+
+	// Resolve agent name from cache
+	var agentName string
+	var user models.User
+	if err := a.DB.Select("full_name").First(&user, userID).Error; err == nil {
+		agentName = user.FullName
+	}
+
+	a.WSHub.BroadcastToOrg(orgID, websocket.WSMessage{
+		Type: websocket.TypeAgentTyping,
+		Payload: map[string]any{
+			"contact_id": contactID.String(),
+			"user_id":    userID.String(),
+			"user_name":  agentName,
+		},
+	})
+
+	return r.SendEnvelope(map[string]string{"ok": "true"})
 }
 
 // broadcastReactionUpdate broadcasts a reaction update via WebSocket
