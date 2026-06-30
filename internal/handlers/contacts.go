@@ -213,22 +213,60 @@ func (a *App) ListContacts(r *fastglue.Request) error {
 	return r.SendEnvelope(listEnvelope("contacts", response, total, pg))
 }
 
-// scopeAssignedContact narrows a contact query for users who lack the
-// contacts:read permission: they may only access contacts assigned to them
-// (assigned_user_id) or contacts with an active agent transfer to them. With
-// the permission, the query is returned unchanged. Keeping this in one place
-// ensures every contact endpoint enforces the same visibility — assignment
-// via an active transfer counts even when assigned_user_id is unset (which it
-// is unless the AssignToSameAgent setting is on).
+// scopeAssignedContact narrows a contact query based on user visibility rules:
+//
+//  1. contacts:read (Admin/Manager) → sees all contacts in the org (unchanged).
+//  2. ScopeTeamsOnly role flag       → sees contacts directly assigned to them
+//     OR whose active AgentTransfer targets a team the user belongs to.
+//  3. No contacts:read / no flag     → sees only contacts directly assigned to them
+//     or with an active AgentTransfer to them personally (Agent behaviour).
+//
+// Keeping all three tiers here ensures every contact endpoint is consistent.
 func (a *App) scopeAssignedContact(query *gorm.DB, userID, orgID uuid.UUID) *gorm.DB {
+	// Tier 1 — full org visibility (Admin / Manager)
 	if a.HasPermission(userID, models.ResourceContacts, models.ActionRead, orgID) {
+		perms, err := a.getUserPermissionsCached(userID, orgID)
+		if err == nil && perms.ScopeTeamsOnly {
+			// contacts:read but restricted to own teams
+			return a.scopeToUserTeams(query, userID, orgID)
+		}
 		return query
 	}
+	// Tier 2 / 3 — scoped access
 	return query.Where("assigned_user_id = ? OR id IN (?)",
 		userID,
 		a.DB.Model(&models.AgentTransfer{}).
 			Select("contact_id").
 			Where("agent_id = ? AND organization_id = ? AND status = ?", userID, orgID, models.TransferStatusActive),
+	)
+}
+
+// scopeToUserTeams restricts contact visibility to:
+//   - contacts directly assigned to userID, OR
+//   - contacts whose active AgentTransfer.TeamID is in the set of teams the
+//     user belongs to (team_members table), OR
+//   - contacts with an active AgentTransfer directly to the user.
+//
+// This implements the "departmental agent" access pattern: the user sees all
+// conversations routed to their department without needing full org access.
+func (a *App) scopeToUserTeams(query *gorm.DB, userID, orgID uuid.UUID) *gorm.DB {
+	userTeams := a.DB.Model(&models.TeamMember{}).
+		Select("team_id").
+		Where("user_id = ?", userID)
+
+	teamTransfers := a.DB.Model(&models.AgentTransfer{}).
+		Select("contact_id").
+		Where("team_id IN (?) AND organization_id = ? AND status = ?",
+			userTeams, orgID, models.TransferStatusActive)
+
+	agentTransfers := a.DB.Model(&models.AgentTransfer{}).
+		Select("contact_id").
+		Where("agent_id = ? AND organization_id = ? AND status = ?",
+			userID, orgID, models.TransferStatusActive)
+
+	return query.Where(
+		"assigned_user_id = ? OR id IN (?) OR id IN (?)",
+		userID, teamTransfers, agentTransfers,
 	)
 }
 
