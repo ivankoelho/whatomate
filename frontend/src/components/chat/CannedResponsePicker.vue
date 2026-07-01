@@ -25,6 +25,28 @@ const internalOpen = ref(false)
 const isLoading = ref(false)
 const searchQuery = ref('')
 const responses = ref<CannedResponse[]>([])
+// Keyboard navigation
+const highlightedIndex = ref(-1)
+
+function onKeydown(e: KeyboardEvent) {
+  const items = filteredResponses.value
+  if (!isOpen.value || items.length === 0) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    highlightedIndex.value = (highlightedIndex.value + 1) % items.length
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    highlightedIndex.value = (highlightedIndex.value - 1 + items.length) % items.length
+  } else if (e.key === 'Enter' && highlightedIndex.value >= 0) {
+    e.preventDefault()
+    selectResponse(items[highlightedIndex.value])
+  } else if (e.key === 'Escape') {
+    isOpen.value = false
+  }
+}
+
+// Reset highlight when list changes
+watch(filteredResponses, () => { highlightedIndex.value = -1 })
 
 // Sync external open state - use external if true, otherwise use internal
 const isOpen = computed({
@@ -116,7 +138,7 @@ function selectResponse(response: CannedResponse) {
         <MessageSquareText class="h-5 w-5" />
       </Button>
     </PopoverTrigger>
-    <PopoverContent side="top" align="start" class="w-80 p-0">
+    <PopoverContent side="top" align="start" class="w-80 p-0" @keydown="onKeydown">
       <div class="p-3 border-b">
         <div class="relative">
           <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -147,7 +169,10 @@ function selectResponse(response: CannedResponse) {
               v-for="response in items"
               :key="response.id"
               @click="selectResponse(response)"
-              class="w-full text-left px-3 py-2 rounded-md hover:bg-accent transition-colors"
+              :class="[
+                'w-full text-left px-3 py-2 rounded-md transition-colors',
+                filteredResponses.indexOf(response) === highlightedIndex ? 'bg-accent' : 'hover:bg-accent'
+              ]"
             >
               <div class="flex items-center justify-between">
                 <span class="font-medium text-sm">{{ response.name }}</span>
