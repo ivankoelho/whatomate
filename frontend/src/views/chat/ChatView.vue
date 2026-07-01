@@ -147,6 +147,22 @@ function setStatusTab(tab: StatusTab) {
 }
 const isTransferring = ref(false)
 const isResuming = ref(false)
+/** Transfer ativo do contato atual, buscado diretamente via API ao abrir a conversa. */
+const contactActiveTransfer = ref<{ id: string; status: string } | null>(null)
+
+async function fetchContactActiveTransfer() {
+  if (!contactsStore.currentContact) {
+    contactActiveTransfer.value = null
+    return
+  }
+  try {
+    const res = await contactsService.getActiveTransfer(contactsStore.currentContact.id)
+    const t = (res.data as any)?.data?.transfer ?? (res.data as any)?.transfer ?? null
+    contactActiveTransfer.value = t
+  } catch {
+    contactActiveTransfer.value = null
+  }
+}
 // Tracks incoming messages that arrived while the chat is open.
 // Surfaced as a "N unread messages" pill at the top of the chat panel
 // (WhatsApp-style). Click the pill to jump up to the first message of
@@ -303,10 +319,12 @@ function updateAtBottom(el: HTMLElement) {
 
 const contactId = computed(() => route.params.contactId as string | undefined)
 
-// Get active transfer for current contact from the store (reactive)
+// Get active transfer — checks per-contact API result first (always fresh),
+// falls back to global store for live WS updates.
 const activeTransfer = computed(() => {
+  if (contactActiveTransfer.value) return contactActiveTransfer.value
   if (!contactsStore.currentContact) return null
-  return transfersStore.getActiveTransferForContact(contactsStore.currentContact.id)
+  return transfersStore.getActiveTransferForContact(contactsStore.currentContact.id) ?? null
 })
 
 const activeTransferId = computed(() => activeTransfer.value?.id || null)
