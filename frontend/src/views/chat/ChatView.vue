@@ -601,6 +601,8 @@ async function selectContact(id: string) {
     contactsStore.setAccountFilter(null)
 
     contactsStore.setCurrentContact(contact)
+    // Fetch the active transfer directly for this contact (bypasses store pagination/scope)
+    fetchContactActiveTransfer()
     await contactsStore.fetchMessages(id)
 
     // Discover distinct accounts from the unfiltered message set
@@ -1269,6 +1271,7 @@ async function transferToAgent() {
     })
     // Refresh transfers store (WebSocket will also update, but this ensures immediate sync)
     await transfersStore.fetchTransfers({ status: 'active' })
+    await fetchContactActiveTransfer()
   } catch (error: any) {
     const message = error.response?.data?.message || t('chat.transferFailed')
     toast.error(message)
@@ -1289,6 +1292,7 @@ async function resumeChatbot() {
     })
     // Refresh transfers store to update UI
     await transfersStore.fetchTransfers({ status: 'active' })
+    await fetchContactActiveTransfer()
     // Refresh contacts list (assignment may have changed)
     await contactsStore.fetchContacts()
 
