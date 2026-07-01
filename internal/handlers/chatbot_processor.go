@@ -268,7 +268,29 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	// Log incoming message to session
 	a.logSessionMessage(session.ID, models.DirectionIncoming, messageText, "keyword_check")
 
-	// Check for transfer keyword BEFORE sending greeting (transfer takes priority)
+	// FIX: Active flow takes absolute priority over keyword rules.
+	// A user inside a running flow (e.g. buttons node waiting for a click)
+	// must never be intercepted by a keyword-transfer rule — the button
+	// title can easily match a keyword and would silently terminate the flow.
+	if session.CurrentFlowID != nil {
+		flow, err := a.getChatbotFlowByIDCached(account.OrganizationID, *session.CurrentFlowID)
+		if err != nil || flow == nil {
+			a.Log.Error("Active chatbot flow not loadable", "error", err, "session", session.ID, "flow", session.CurrentFlowID)
+			a.exitFlow(session)
+			return
+		}
+		if flow.Graph == nil {
+			a.Log.Error("Active chatbot flow has no v2 graph; ignoring inbound", "session", session.ID, "flow", flow.ID)
+			a.exitFlow(session)
+			return
+		}
+		if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
+			a.Log.Error("Chat graph runner failed", "error", err, "session", session.ID, "flow", flow.ID)
+		}
+		return
+	}
+
+	// Check for transfer keyword (only when NOT inside an active flow)
 	keywordResponse, keywordMatched := a.matchKeywordRules(account.OrganizationID, account.Name, messageText)
 	if keywordMatched && keywordResponse.ResponseType == models.ResponseTypeTransfer {
 		a.Log.Info("Transfer keyword matched", "response", keywordResponse.Body)
@@ -294,29 +316,8 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		return
 	}
 
-	// Check if user is in an active flow. After Phase 4.2 every flow has
-	// a v2 Graph populated; any flow without one is a misconfiguration
-	// (manual DB edit or failed backfill) — log and exit cleanly.
-	if session.CurrentFlowID != nil {
-		flow, err := a.getChatbotFlowByIDCached(account.OrganizationID, *session.CurrentFlowID)
-		if err != nil || flow == nil {
-			a.Log.Error("Active chatbot flow not loadable", "error", err, "session", session.ID, "flow", session.CurrentFlowID)
-			a.exitFlow(session)
-			return
-		}
-		if flow.Graph == nil {
-			a.Log.Error("Active chatbot flow has no v2 graph; ignoring inbound", "session", session.ID, "flow", flow.ID)
-			a.exitFlow(session)
-			return
-		}
-		if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
-			a.Log.Error("Chat graph runner failed", "error", err, "session", session.ID, "flow", flow.ID)
-		}
-		return
-	}
-
 	// Try to match flow trigger keywords first (before greeting to avoid duplicate messages)
-	if flow := a.matchFlowTrigger(account.OrganizationID, messageText); flow != nil {
+	if flow := a.matchFlowTrigger(account.OrganizationID, messageText, buttonID); flow != nil {
 		if flow.Graph == nil {
 			a.Log.Error("Triggered chatbot flow has no v2 graph; ignoring", "flow", flow.ID)
 			return
@@ -720,7 +721,7 @@ func (a *App) logSessionMessage(sessionID uuid.UUID, direction models.Direction,
 }
 
 // matchFlowTrigger checks if the message triggers any flow
-func (a *App) matchFlowTrigger(orgID uuid.UUID, messageText string) *models.ChatbotFlow {
+func (a *App) matchFlowTrigger(orgID uuid.UUID, messageText, buttonID string) *models.ChatbotFlow {
 	// Use cached flows (includes steps)
 	flows, err := a.getChatbotFlowsCached(orgID)
 	if err != nil {
@@ -729,10 +730,15 @@ func (a *App) matchFlowTrigger(orgID uuid.UUID, messageText string) *models.Chat
 	}
 
 	messageLower := strings.ToLower(messageText)
+	buttonIDLower := strings.ToLower(buttonID)
 
 	for _, flow := range flows {
 		for _, keyword := range flow.TriggerKeywords {
-			if strings.Contains(messageLower, strings.ToLower(keyword)) {
+			kw := strings.ToLower(keyword)
+			// Match against message text OR button ID so greeting buttons
+			// whose ID contains the trigger keyword correctly start the flow
+			// even when the button title does not contain it.
+			if strings.Contains(messageLower, kw) || (buttonIDLower != "" && strings.Contains(buttonIDLower, kw)) {
 				return &flow
 			}
 		}
