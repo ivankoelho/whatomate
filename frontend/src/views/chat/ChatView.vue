@@ -598,6 +598,11 @@ watch(contactId, async (newId) => {
 })
 
 async function selectContact(id: string) {
+  // Cancel any pending typing throttle from previous contact
+  if (typingThrottleTimer.value !== null) {
+    clearTimeout(typingThrottleTimer.value)
+    typingThrottleTimer.value = null
+  }
   // Direct deep links to /chat/:id may target a contact that isn't in the
   // currently-loaded (paginated) list — fall back to fetching it directly.
   let contact = contactsStore.contacts.find(c => c.id === id)
@@ -1713,6 +1718,39 @@ async function sendMediaMessage() {
     isUploadingMedia.value = false
   }
 }
+
+// ── Slash picker state (inline dropdown above textarea) ──────────────
+const slashPickerIndex = ref(0)
+const allCannedResponses = ref<CannedResponse[]>([])
+
+const filteredCannedForSlash = computed(() => {
+  const query = cannedSearchQuery.value.toLowerCase()
+  const list = allCannedResponses.value
+  if (!query) return list.slice(0, 8)
+  return list.filter(r =>
+    r.name.toLowerCase().includes(query) ||
+    r.content.toLowerCase().includes(query) ||
+    (r.shortcut && r.shortcut.toLowerCase().includes(query))
+  ).slice(0, 8)
+})
+
+async function ensureCannedLoaded() {
+  if (allCannedResponses.value.length > 0) return
+  try {
+    const res = await cannedResponsesService.list({ active_only: 'true' })
+    const data = (res.data as any).data || res.data
+    allCannedResponses.value = data.canned_responses || []
+  } catch { /* silent */ }
+}
+
+function insertCannedFromSlash(response: CannedResponse) {
+  messageInput.value = ''
+  cannedPickerOpen.value = false
+  cannedSearchQuery.value = ''
+  slashPickerIndex.value = 0
+  handleCannedSelect(response)
+}
+
 </script>
 
 <template>
