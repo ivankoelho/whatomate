@@ -651,6 +651,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/contacts/{id}/mark-read", app.MarkContactRead)
 	// Typing indicator — lightweight, no DB write, just broadcasts WS event
 	g.POST("/api/contacts/{id}/typing", app.BroadcastAgentTyping)
+	// Returns active transfer for contact — used by ChatView "Retornar ao fluxo" button
+	g.GET("/api/contacts/{id}/transfer", app.GetActiveTransferForContact)
 	g.POST("/api/contacts/{id}/messages/{message_id}/reaction", app.SendReaction)
 	g.POST("/api/messages", app.SendMessage) // Legacy route
 	g.POST("/api/messages/template", app.SendTemplateMessage)
