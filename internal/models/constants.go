@@ -112,9 +112,10 @@ const (
 type TransferStatus string
 
 const (
-	TransferStatusActive  TransferStatus = "active"
-	TransferStatusResumed TransferStatus = "resumed"
-	TransferStatusExpired TransferStatus = "expired"
+	TransferStatusActive   TransferStatus = "active"
+	TransferStatusResumed  TransferStatus = "resumed"
+	TransferStatusExpired  TransferStatus = "expired"
+	TransferStatusResolved TransferStatus = "resolved"
 )
 
 // TransferSource represents how a transfer was initiated
