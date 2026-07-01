@@ -290,7 +290,32 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		return
 	}
 
-	// Check for transfer keyword (only when NOT inside an active flow)
+	// Try to match flow trigger keywords and button IDs first.
+	// Flows have highest priority after an active session: they are the primary
+	// automation mechanism and must not be intercepted by keyword-transfer rules.
+	// This restores upstream intent (flows > keywords) while keeping the fork's
+	// buttonID support in matchFlowTrigger.
+	if flow := a.matchFlowTrigger(account.OrganizationID, messageText, buttonID); flow != nil {
+		if flow.Graph == nil {
+			a.Log.Error("Triggered chatbot flow has no v2 graph; ignoring", "flow", flow.ID)
+			return
+		}
+		session.CurrentFlowID = &flow.ID
+		session.CurrentStep = ""
+		session.StepRetries = 0
+		session.SessionData = models.JSONB{
+			"_flow_id":   flow.ID.String(),
+			"_flow_name": flow.Name,
+		}
+		if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
+			a.Log.Error("Chat graph runner failed at flow start", "error", err, "session", session.ID, "flow", flow.ID)
+		}
+		return
+	}
+
+	// Check for transfer keyword — only fires when no flow was triggered or is active.
+	// Transfer has lower priority than flows but higher priority than greeting and
+	// keyword-text rules, preserving upstream intent.
 	keywordResponse, keywordMatched := a.matchKeywordRules(account.OrganizationID, account.Name, messageText)
 	if keywordMatched && keywordResponse.ResponseType == models.ResponseTypeTransfer {
 		a.Log.Info("Transfer keyword matched", "response", keywordResponse.Body)
@@ -316,26 +341,7 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		return
 	}
 
-	// Try to match flow trigger keywords first (before greeting to avoid duplicate messages)
-	if flow := a.matchFlowTrigger(account.OrganizationID, messageText, buttonID); flow != nil {
-		if flow.Graph == nil {
-			a.Log.Error("Triggered chatbot flow has no v2 graph; ignoring", "flow", flow.ID)
-			return
-		}
-		session.CurrentFlowID = &flow.ID
-		session.CurrentStep = ""
-		session.StepRetries = 0
-		session.SessionData = models.JSONB{
-			"_flow_id":   flow.ID.String(),
-			"_flow_name": flow.Name,
-		}
-		if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
-			a.Log.Error("Chat graph runner failed at flow start", "error", err, "session", session.ID, "flow", flow.ID)
-		}
-		return
-	}
-
-	// Send greeting message for new sessions (only if no flow was triggered)
+	// Send greeting message for new sessions (only if no flow was triggered and no transfer)
 	if isNewSession && settings.DefaultResponse != "" {
 		a.Log.Info("New session - sending greeting message", "contact", contact.PhoneNumber)
 		if len(settings.GreetingButtons) > 0 {
@@ -541,6 +547,10 @@ func (a *App) matchKeywordRules(orgID uuid.UUID, accountName, messageText string
 						}
 						return response, true
 					}
+					// flow_id missing or empty: rule is misconfigured — log and skip.
+					a.Log.Warn("Keyword rule ResponseTypeFlow has no valid flow_id; skipping",
+						"rule_id", rule.ID, "keywords", rule.Keywords)
+					return nil, false
 
 				default:
 					// text, template, media, script — all need a body
