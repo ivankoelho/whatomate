@@ -2689,7 +2689,10 @@ function insertCannedFromSlash(response: CannedResponse) {
               :placeholder="$t('chat.typeMessage') + '...'"
               rows="1"
               class="flex-1 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[36px] max-h-[120px] py-2 overflow-y-auto"
-              @keydown.enter.exact.prevent="sendMessage"
+              @keydown.enter.exact.prevent="cannedPickerOpen && filteredCannedForSlash.length > 0 ? insertCannedFromSlash(filteredCannedForSlash[slashPickerIndex]) : sendMessage()"
+              @keydown.arrow-down.prevent="if (cannedPickerOpen) slashPickerIndex = Math.min(slashPickerIndex + 1, filteredCannedForSlash.length - 1)"
+              @keydown.arrow-up.prevent="if (cannedPickerOpen) slashPickerIndex = Math.max(slashPickerIndex - 1, 0)"
+              @keydown.escape="if (cannedPickerOpen) { cannedPickerOpen = false; cannedSearchQuery = ''; messageInput = '' }"
               @input="autoResizeTextarea"
             />
             <button type="submit" class="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 light:bg-emerald-500 light:hover:bg-emerald-600 flex items-center justify-center transition-colors disabled:opacity-50" :disabled="!messageInput.trim() || isSending">
