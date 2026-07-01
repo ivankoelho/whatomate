@@ -1754,6 +1754,39 @@ function insertCannedFromSlash(response: CannedResponse) {
   handleCannedSelect(response)
 }
 
+
+// ── Textarea keyboard handlers for slash picker ─────────────────────────────
+function onTextareaEnter() {
+  if (cannedPickerOpen.value && filteredCannedForSlash.value.length > 0) {
+    insertCannedFromSlash(filteredCannedForSlash.value[slashPickerIndex.value])
+  } else {
+    sendMessage()
+  }
+}
+
+function onTextareaArrowDown() {
+  if (cannedPickerOpen.value) {
+    slashPickerIndex.value = Math.min(
+      slashPickerIndex.value + 1,
+      filteredCannedForSlash.value.length - 1
+    )
+  }
+}
+
+function onTextareaArrowUp() {
+  if (cannedPickerOpen.value) {
+    slashPickerIndex.value = Math.max(slashPickerIndex.value - 1, 0)
+  }
+}
+
+function onTextareaEscape() {
+  if (cannedPickerOpen.value) {
+    cannedPickerOpen.value = false
+    cannedSearchQuery.value = ''
+    messageInput.value = ''
+  }
+}
+
 </script>
 
 <template>
@@ -2692,10 +2725,10 @@ function insertCannedFromSlash(response: CannedResponse) {
               :placeholder="$t('chat.typeMessage') + '...'"
               rows="1"
               class="flex-1 bg-transparent text-[14px] text-white light:text-gray-900 placeholder:text-white/30 light:placeholder:text-gray-400 focus:outline-none resize-none min-h-[36px] max-h-[120px] py-2 overflow-y-auto"
-              @keydown.enter.exact.prevent="cannedPickerOpen && filteredCannedForSlash.length > 0 ? insertCannedFromSlash(filteredCannedForSlash[slashPickerIndex]) : sendMessage()"
-              @keydown.arrow-down.prevent="if (cannedPickerOpen) slashPickerIndex = Math.min(slashPickerIndex + 1, filteredCannedForSlash.length - 1)"
-              @keydown.arrow-up.prevent="if (cannedPickerOpen) slashPickerIndex = Math.max(slashPickerIndex - 1, 0)"
-              @keydown.escape="if (cannedPickerOpen) { cannedPickerOpen = false; cannedSearchQuery = ''; messageInput = '' }"
+              @keydown.enter.exact.prevent="onTextareaEnter"
+              @keydown.arrow-down.prevent="onTextareaArrowDown"
+              @keydown.arrow-up.prevent="onTextareaArrowUp"
+              @keydown.escape="onTextareaEscape"
               @input="autoResizeTextarea"
             />
             <button type="submit" class="w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 light:bg-emerald-500 light:hover:bg-emerald-600 flex items-center justify-center transition-colors disabled:opacity-50" :disabled="!messageInput.trim() || isSending">
