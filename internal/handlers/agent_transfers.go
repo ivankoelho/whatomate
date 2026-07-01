@@ -1073,6 +1073,27 @@ func (a *App) hasActiveAgentTransfer(orgID, contactID uuid.UUID) bool {
 	return count > 0
 }
 
+// resolveStaleDisabledTransfers auto-resolves any "chatbot_disabled" transfers for a
+// contact when the chatbot is re-enabled. Without this, an old transfer created when
+// the chatbot was disabled will permanently block all chatbot processing (flows,
+// keywords, greeting) because hasActiveAgentTransfer returns true for every message.
+func (a *App) resolveStaleDisabledTransfers(orgID, contactID uuid.UUID) {
+	result := a.DB.Model(&models.AgentTransfer{}).
+		Where("organization_id = ? AND contact_id = ? AND status = ? AND source = ?",
+			orgID, contactID, models.TransferStatusActive, models.TransferSourceChatbotDisabled).
+		Updates(map[string]any{
+			"status":      models.TransferStatusResolved,
+			"resolved_at": time.Now(),
+		})
+	if result.Error != nil {
+		a.Log.Error("Failed to resolve stale chatbot_disabled transfers", "error", result.Error, "contact_id", contactID)
+		return
+	}
+	if result.RowsAffected > 0 {
+		a.Log.Info("Auto-resolved stale chatbot_disabled transfers", "contact_id", contactID, "count", result.RowsAffected)
+	}
+}
+
 // willChatbotHandle returns true when an incoming message is expected to be
 // handled by the chatbot — i.e. chatbot is enabled for the account and the
 // contact has no active agent transfer. Used to pre-mark messages as read
