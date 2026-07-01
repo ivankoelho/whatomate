@@ -365,9 +365,38 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 
 	// Handle non-transfer keyword matches (transfer was already handled above)
 	if keywordMatched && keywordResponse.ResponseType != models.ResponseTypeTransfer {
-		a.Log.Info("Keyword rule matched", "response_type", keywordResponse.ResponseType, "response", keywordResponse.Body)
+		a.Log.Info("Keyword rule matched", "response_type", keywordResponse.ResponseType, "response", keywordResponse.Body, "flow_id", keywordResponse.FlowID)
 
-		// Handle regular text response
+		// Flow-type keyword: launch the referenced chatbot flow
+		if keywordResponse.ResponseType == models.ResponseTypeFlow && keywordResponse.FlowID != "" {
+			flowID, err := uuid.Parse(keywordResponse.FlowID)
+			if err == nil {
+				flow, _ := a.getChatbotFlowByIDCached(account.OrganizationID, flowID)
+				if flow != nil && flow.Graph != nil {
+					// Optional preamble message before the flow starts
+					if keywordResponse.Body != "" {
+						if err := a.sendAndSaveTextMessage(account, contact, keywordResponse.Body); err != nil {
+							a.Log.Error("Failed to send flow preamble", "error", err)
+						}
+					}
+					session.CurrentFlowID = &flow.ID
+					session.CurrentStep = ""
+					session.StepRetries = 0
+					session.SessionData = models.JSONB{
+						"_flow_id":   flow.ID.String(),
+						"_flow_name": flow.Name,
+					}
+					if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
+						a.Log.Error("Chat graph runner failed at keyword-triggered flow", "error", err, "flow_id", flow.ID)
+					}
+					return
+				}
+			}
+			a.Log.Warn("Keyword flow_id not found or has no graph", "flow_id", keywordResponse.FlowID)
+			return
+		}
+
+		// Handle regular text/buttons response
 		if len(keywordResponse.Buttons) > 0 {
 			if err := a.sendAndSaveInteractiveButtons(account, contact, keywordResponse.Body, keywordResponse.Buttons); err != nil {
 				a.Log.Error("Failed to send interactive buttons", "error", err, "contact", contact.PhoneNumber)
@@ -491,31 +520,43 @@ func (a *App) matchKeywordRules(orgID uuid.UUID, accountName, messageText string
 					ResponseType: rule.ResponseType,
 				}
 
-				// For transfer type, use body as the transfer message
-				if rule.ResponseType == models.ResponseTypeTransfer {
+				// Handle each response type explicitly
+				switch rule.ResponseType {
+				case models.ResponseTypeTransfer:
+					// Optional pre-transfer message
 					if body, ok := rule.ResponseContent["body"].(string); ok {
 						response.Body = body
 					}
 					return response, true
-				}
 
-				// Get response body
-				if body, ok := rule.ResponseContent["body"].(string); ok {
-					response.Body = body
-				}
+				case models.ResponseTypeFlow:
+					// Keyword triggers a specific chatbot flow.
+					// response_content must contain { "flow_id": "<uuid>" }.
+					if flowID, ok := rule.ResponseContent["flow_id"].(string); ok && flowID != "" {
+						response.FlowID = flowID
+						// Optional preamble message before flow starts
+						if body, ok := rule.ResponseContent["body"].(string); ok {
+							response.Body = body
+						}
+						return response, true
+					}
 
-				// Get buttons if present
-				if buttons, ok := rule.ResponseContent["buttons"].([]any); ok && len(buttons) > 0 {
-					response.Buttons = make([]map[string]any, 0, len(buttons))
-					for _, btn := range buttons {
-						if btnMap, ok := btn.(map[string]any); ok {
-							response.Buttons = append(response.Buttons, btnMap)
+				default:
+					// text, template, media, script — all need a body
+					if body, ok := rule.ResponseContent["body"].(string); ok {
+						response.Body = body
+					}
+					if buttons, ok := rule.ResponseContent["buttons"].([]any); ok && len(buttons) > 0 {
+						response.Buttons = make([]map[string]any, 0, len(buttons))
+						for _, btn := range buttons {
+							if btnMap, ok := btn.(map[string]any); ok {
+								response.Buttons = append(response.Buttons, btnMap)
+							}
 						}
 					}
-				}
-
-				if response.Body != "" {
-					return response, true
+					if response.Body != "" {
+						return response, true
+					}
 				}
 			}
 		}
