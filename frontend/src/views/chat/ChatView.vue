@@ -1734,6 +1734,9 @@ const filteredCannedForSlash = computed(() => {
   ).slice(0, 8)
 })
 
+// Reset highlight index when the filtered list changes
+watch(filteredCannedForSlash, () => { slashPickerIndex.value = 0 })
+
 async function ensureCannedLoaded() {
   if (allCannedResponses.value.length > 0) return
   try {
@@ -2611,7 +2614,7 @@ function insertCannedFromSlash(response: CannedResponse) {
 
      <!-- Indicador: outro agente está digitando nesta conversa -->
           <div
-            v-if="contactsStore.agentTyping.get(contactsStore.currentContact?.id || '')"
+            v-if="contactsStore.agentTyping[contactsStore.currentContact?.id || '']"
             class="px-3 pb-1 text-[11px] text-white/40 light:text-gray-400 italic flex items-center gap-1.5"
           >
             <span class="inline-flex gap-0.5">
@@ -2619,7 +2622,7 @@ function insertCannedFromSlash(response: CannedResponse) {
               <span class="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:150ms]"></span>
               <span class="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:300ms]"></span>
             </span>
-            {{ contactsStore.agentTyping.get(contactsStore.currentContact?.id || '')?.name }} está digitando...
+            {{ contactsStore.agentTyping[contactsStore.currentContact?.id || '']?.name }} está digitando...
           </div>
           <form @submit.prevent="sendMessage" class="flex items-center gap-2 p-2 rounded-xl bg-white/[0.06] light:bg-gray-100 border border-white/[0.08] light:border-gray-200">
             <Tooltip>
@@ -2996,4 +2999,14 @@ function insertCannedFromSlash(response: CannedResponse) {
 .sticky-date-leave-to {
   opacity: 0;
 }
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.15s ease;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 </style>
