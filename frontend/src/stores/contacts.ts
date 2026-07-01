@@ -80,6 +80,10 @@ export interface Message {
   reply_to_message?: ReplyPreview
   reactions?: Reaction[]
   whatsapp_account?: string
+  /** ID do agente que enviou esta mensagem (undefined para mensagens do cliente/chatbot). */
+  sent_by_user_id?: string
+  /** Nome completo do agente que enviou esta mensagem, para exibição na bolha. */
+  sent_by_user_name?: string
   created_at: string
   updated_at: string
 }
@@ -88,6 +92,13 @@ export const useContactsStore = defineStore('contacts', () => {
   const contacts = ref<Contact[]>([])
   const currentContact = ref<Contact | null>(null)
   const messages = ref<Message[]>([])
+
+  /**
+   * Mapa de indicadores de digitação por contato.
+   * Chave: contact_id. Valor: { name: string } do agente que está digitando.
+   * Limpo automaticamente após 4 s sem novo evento (ver websocket.ts).
+   */
+  const agentTyping = ref<Map<string, { name: string }>>(new Map())
   const isLoading = ref(false)
   const isLoadingMessages = ref(false)
   const isLoadingOlderMessages = ref(false)
@@ -435,6 +446,7 @@ export const useContactsStore = defineStore('contacts', () => {
     contacts,
     currentContact,
     messages,
+    agentTyping,
     isLoading,
     isLoadingMessages,
     isLoadingOlderMessages,
