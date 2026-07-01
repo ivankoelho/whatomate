@@ -316,8 +316,20 @@ func (a *App) execChatButtons(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, er
 func (a *App) execChatPrompt(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, error) {
 	body := stringFromConfig(node.Config, "body", "message", "text")
 
-	// No input yet → send prompt and wait.
-	if !ctx.consumed && ctx.userInput == "" {
+	// No input for THIS node yet → send prompt and wait.
+	//
+	// ctx.consumed also routes here: it means an earlier blocking node in
+	// this same run (e.g. a buttons node) already consumed ctx.userInput
+	// for itself before advancing to this node via a non-blocking edge.
+	// From this prompt node's perspective no answer has been given to its
+	// own question, so it must ask (send its body) and yield — not treat
+	// the previous node's leftover input as if it were its own answer, and
+	// not silently yield without ever asking. Previously this case fell
+	// through to a separate branch that returned yield without sending the
+	// prompt body, which left the flow stuck with no visible message and,
+	// in older builds, allowed stale input to cascade through multiple
+	// prompt nodes to a much later part of the flow.
+	if ctx.userInput == "" || ctx.consumed {
 		if body == "" {
 			return nodeOutcome{}, fmt.Errorf("prompt node %q has no body configured", node.ID)
 		}
@@ -326,12 +338,6 @@ func (a *App) execChatPrompt(node *ChatNode, ctx *chatNodeCtx) (nodeOutcome, err
 			return nodeOutcome{}, fmt.Errorf("send prompt: %w", err)
 		}
 		a.logSessionMessage(ctx.session.ID, models.DirectionOutgoing, rendered, node.ID)
-		return nodeOutcome{yield: true}, nil
-	}
-
-	if ctx.consumed {
-		// Input was already consumed by an earlier blocking node in this
-		// run — defensive guard. Treat as fresh entry.
 		return nodeOutcome{yield: true}, nil
 	}
 
