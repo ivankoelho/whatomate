@@ -225,13 +225,13 @@ onMounted(async () => {
             <Switch :checked="form.is_default" @update:checked="form.is_default = $event" :disabled="!canEditForm" />
           </div>
           <!-- Scope Teams Only toggle — visible only on custom roles with contacts:read -->
-          <div v-if="!isSystem && form.permissions.includes('contacts:read')" class="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2.5">
+          <div v-if="!isSystem" class="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2.5">
             <div class="space-y-0.5">
               <Label class="text-xs font-medium cursor-pointer text-amber-900 dark:text-amber-200">
                 Restringir visibilidade ao time
               </Label>
               <p class="text-[11px] text-amber-700 dark:text-amber-400">
-                Usuários com este perfil verão apenas conversas direcionadas ao seu departamento, não todas as mensagens da organização.
+                Quando ativado, usuários com este perfil verão apenas conversas do seu time. Requer também a permissão "Contatos: Visualizar" para ter efeito.
               </p>
             </div>
             <Switch
