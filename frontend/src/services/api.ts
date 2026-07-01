@@ -201,6 +201,8 @@ export const contactsService = {
     api.put(`/contacts/${id}/tags`, { tags }),
   getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`),
   markRead: (id: string) => api.post(`/contacts/${encodeURIComponent(id)}/mark-read`),
+  /** Emite evento agent_typing via WS para os demais agentes. Deve ser chamado com debounce. */
+  typing: (contactId: string) => api.post(`/contacts/${encodeURIComponent(contactId)}/typing`),
   updateStatus: (id: string, status: 'new' | 'in_progress' | 'resolved') =>
     api.put(`/contacts/${id}/status`, { status }),
 }
