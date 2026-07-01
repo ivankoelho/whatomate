@@ -467,7 +467,8 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 type KeywordResponse struct {
 	Body         string
 	Buttons      []map[string]any
-	ResponseType models.ResponseType // text, transfer
+	ResponseType models.ResponseType // text, transfer, flow
+	FlowID       string              // populated when ResponseType == ResponseTypeFlow
 }
 
 // matchKeywordRules checks if the message matches any keyword rules
