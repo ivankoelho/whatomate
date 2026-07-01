@@ -324,31 +324,85 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	// Transfer has lower priority than flows but higher priority than greeting and
 	// keyword-text rules, preserving upstream intent.
 	keywordResponse, keywordMatched := a.matchKeywordRules(account.OrganizationID, account.Name, messageText)
-	if keywordMatched && keywordResponse.ResponseType == models.ResponseTypeTransfer {
-		a.Log.Info("Transfer keyword matched", "response", keywordResponse.Body)
-		// Check business hours - if outside hours, send out of hours message instead
-		if settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
-			if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
-				a.Log.Info("Outside business hours, sending out of hours message instead of transfer")
-				if settings.BusinessHours.OutOfHoursMessage != "" {
-					if err := a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage); err != nil {
-						a.Log.Error("Failed to send out of hours message", "error", err, "contact", contact.PhoneNumber)
+
+	// Handle ALL keyword rule matches BEFORE the greeting.
+	// This ensures keyword rules (flow, text, transfer, buttons) always take priority,
+	// even on brand-new sessions where isNewSession=true.
+	if keywordMatched {
+		a.Log.Info("Keyword rule matched", "response_type", keywordResponse.ResponseType, "response", keywordResponse.Body, "flow_id", keywordResponse.FlowID)
+
+		switch keywordResponse.ResponseType {
+
+		case models.ResponseTypeTransfer:
+			a.Log.Info("Transfer keyword matched", "response", keywordResponse.Body)
+			// Check business hours - if outside hours, send out of hours message instead
+			if settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
+				if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
+					a.Log.Info("Outside business hours, sending out of hours message instead of transfer")
+					if settings.BusinessHours.OutOfHoursMessage != "" {
+						if err := a.sendAndSaveTextMessage(account, contact, settings.BusinessHours.OutOfHoursMessage); err != nil {
+							a.Log.Error("Failed to send out of hours message", "error", err, "contact", contact.PhoneNumber)
+						}
+					}
+					return
+				}
+			}
+			// Within business hours - send transfer message and create transfer
+			if keywordResponse.Body != "" {
+				if err := a.sendAndSaveTextMessage(account, contact, keywordResponse.Body); err != nil {
+					a.Log.Error("Failed to send transfer message", "error", err, "contact", contact.PhoneNumber)
+				}
+			}
+			a.createTransferFromKeyword(account, contact)
+			return
+
+		case models.ResponseTypeFlow:
+			// Keyword rule triggers a specific chatbot flow
+			if keywordResponse.FlowID != "" {
+				flowID, err := uuid.Parse(keywordResponse.FlowID)
+				if err == nil {
+					flow, _ := a.getChatbotFlowByIDCached(account.OrganizationID, flowID)
+					if flow != nil && flow.Graph != nil {
+						// Optional preamble message before the flow starts
+						if keywordResponse.Body != "" {
+							if err := a.sendAndSaveTextMessage(account, contact, keywordResponse.Body); err != nil {
+								a.Log.Error("Failed to send flow preamble", "error", err)
+							}
+						}
+						session.CurrentFlowID = &flow.ID
+						session.CurrentStep = ""
+						session.StepRetries = 0
+						session.SessionData = models.JSONB{
+							"_flow_id":   flow.ID.String(),
+							"_flow_name": flow.Name,
+						}
+						if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
+							a.Log.Error("Chat graph runner failed at keyword-triggered flow", "error", err, "flow_id", flow.ID)
+						}
+						return
 					}
 				}
-				return
+				a.Log.Warn("Keyword flow_id not found or has no graph", "flow_id", keywordResponse.FlowID)
 			}
-		}
-		// Within business hours - send transfer message and create transfer
-		if keywordResponse.Body != "" {
-			if err := a.sendAndSaveTextMessage(account, contact, keywordResponse.Body); err != nil {
-				a.Log.Error("Failed to send transfer message", "error", err, "contact", contact.PhoneNumber)
+			return
+
+		default:
+			// text, template, media, script — send body ± buttons
+			if len(keywordResponse.Buttons) > 0 {
+				if err := a.sendAndSaveInteractiveButtons(account, contact, keywordResponse.Body, keywordResponse.Buttons); err != nil {
+					a.Log.Error("Failed to send interactive buttons", "error", err, "contact", contact.PhoneNumber)
+				}
+			} else {
+				if err := a.sendAndSaveTextMessage(account, contact, keywordResponse.Body); err != nil {
+					a.Log.Error("Failed to send text message", "error", err, "contact", contact.PhoneNumber)
+				}
 			}
+			a.logSessionMessage(session.ID, models.DirectionOutgoing, keywordResponse.Body, "keyword_response")
+			return
 		}
-		a.createTransferFromKeyword(account, contact)
-		return
 	}
 
-	// Send greeting message for new sessions (only if no flow was triggered and no transfer)
+	// Send greeting message for new sessions only when no flow and no keyword matched
 	if isNewSession && settings.DefaultResponse != "" {
 		a.Log.Info("New session - sending greeting message", "contact", contact.PhoneNumber)
 		if len(settings.GreetingButtons) > 0 {
@@ -375,55 +429,6 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 		a.logSessionMessage(session.ID, models.DirectionOutgoing, settings.DefaultResponse, "greeting")
 		return // After greeting, don't process further for new sessions
 	}
-
-	// Handle non-transfer keyword matches (transfer was already handled above)
-	if keywordMatched && keywordResponse.ResponseType != models.ResponseTypeTransfer {
-		a.Log.Info("Keyword rule matched", "response_type", keywordResponse.ResponseType, "response", keywordResponse.Body, "flow_id", keywordResponse.FlowID)
-
-		// Flow-type keyword: launch the referenced chatbot flow
-		if keywordResponse.ResponseType == models.ResponseTypeFlow && keywordResponse.FlowID != "" {
-			flowID, err := uuid.Parse(keywordResponse.FlowID)
-			if err == nil {
-				flow, _ := a.getChatbotFlowByIDCached(account.OrganizationID, flowID)
-				if flow != nil && flow.Graph != nil {
-					// Optional preamble message before the flow starts
-					if keywordResponse.Body != "" {
-						if err := a.sendAndSaveTextMessage(account, contact, keywordResponse.Body); err != nil {
-							a.Log.Error("Failed to send flow preamble", "error", err)
-						}
-					}
-					session.CurrentFlowID = &flow.ID
-					session.CurrentStep = ""
-					session.StepRetries = 0
-					session.SessionData = models.JSONB{
-						"_flow_id":   flow.ID.String(),
-						"_flow_name": flow.Name,
-					}
-					if err := a.runChatGraph(account, contact, session, flow, messageText, buttonID, flowResponseData); err != nil {
-						a.Log.Error("Chat graph runner failed at keyword-triggered flow", "error", err, "flow_id", flow.ID)
-					}
-					return
-				}
-			}
-			a.Log.Warn("Keyword flow_id not found or has no graph", "flow_id", keywordResponse.FlowID)
-			return
-		}
-
-		// Handle regular text/buttons response
-		if len(keywordResponse.Buttons) > 0 {
-			if err := a.sendAndSaveInteractiveButtons(account, contact, keywordResponse.Body, keywordResponse.Buttons); err != nil {
-				a.Log.Error("Failed to send interactive buttons", "error", err, "contact", contact.PhoneNumber)
-			}
-		} else {
-			if err := a.sendAndSaveTextMessage(account, contact, keywordResponse.Body); err != nil {
-				a.Log.Error("Failed to send text message", "error", err, "contact", contact.PhoneNumber)
-			}
-		}
-		// Log outgoing message
-		a.logSessionMessage(session.ID, models.DirectionOutgoing, keywordResponse.Body, "keyword_response")
-		return
-	}
-
 	// If no keyword matched, try AI response if enabled
 	if settings.AI.Enabled && settings.AI.Provider != "" && settings.AI.APIKey != "" {
 		a.Log.Info("Attempting AI response", "provider", settings.AI.Provider, "model", settings.AI.Model)
