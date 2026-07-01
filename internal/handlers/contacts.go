@@ -1665,6 +1665,55 @@ func (a *App) buildContactResponse(contact *models.Contact, orgID uuid.UUID) Con
 }
 
 // UpdateContactStatus updates the conversation status of a contact
+// GetActiveTransferForContact returns the active AgentTransfer for a contact,
+// or { transfer: null } if none exists. Used by ChatView to determine whether
+// to show the "Retornar ao fluxo" button without relying on the paginated
+// global transfers store.
+func (a *App) GetActiveTransferForContact(r *fastglue.Request) error {
+	orgID, _, err := a.getOrgAndUserID(r)
+	if err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusUnauthorized, "Unauthorized", nil, "")
+	}
+
+	contactID, err := parsePathUUID(r, "id", "contact")
+	if err != nil {
+		return nil
+	}
+
+	var transfer models.AgentTransfer
+	if err := a.DB.
+		Where("organization_id = ? AND contact_id = ? AND status = ?",
+			orgID, contactID, models.TransferStatusActive).
+		Order("transferred_at DESC").
+		First(&transfer).Error; err != nil {
+		// No active transfer — return null (not an error)
+		return r.SendEnvelope(map[string]any{"transfer": nil})
+	}
+
+	var agentIDStr, teamIDStr *string
+	if transfer.AgentID != nil {
+		s := transfer.AgentID.String()
+		agentIDStr = &s
+	}
+	if transfer.TeamID != nil {
+		s := transfer.TeamID.String()
+		teamIDStr = &s
+	}
+
+	return r.SendEnvelope(map[string]any{
+		"transfer": map[string]any{
+			"id":             transfer.ID.String(),
+			"contact_id":     transfer.ContactID.String(),
+			"status":         transfer.Status,
+			"source":         transfer.Source,
+			"agent_id":       agentIDStr,
+			"team_id":        teamIDStr,
+			"notes":          transfer.Notes,
+			"transferred_at": transfer.TransferredAt.Format(time.RFC3339),
+		},
+	})
+}
+
 func (a *App) UpdateContactStatus(r *fastglue.Request) error {
 	orgID, userID, err := a.getOrgAndUserID(r)
 	if err != nil {
