@@ -181,6 +181,23 @@ class WebSocketService {
         case WS_TYPE_NEW_MESSAGE:
           this.handleNewMessage(store, message.payload)
           break
+
+        case 'agent_typing': {
+          // Exibe '<Nome> está digitando...' por 4 s. Ignora self-echo.
+          const authStore = useAuthStore()
+          const me = authStore.user?.id
+          const p = message.payload as { contact_id: string; user_id: string; user_name: string }
+          if (p.user_id === me) break
+          if (!(this as any)._typingTimers) (this as any)._typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
+          const prev = (this as any)._typingTimers.get(p.contact_id)
+          if (prev) clearTimeout(prev)
+          store.agentTyping.set(p.contact_id, { name: p.user_name })
+          const timer = setTimeout(() => {
+            store.agentTyping.delete(p.contact_id)
+          }, 4000)
+          ;(this as any)._typingTimers.set(p.contact_id, timer)
+          break
+        }
         case WS_TYPE_STATUS_UPDATE:
           this.handleStatusUpdate(store, message.payload)
           break
@@ -276,6 +293,8 @@ class WebSocketService {
         reply_to_message_id: payload.reply_to_message_id,
         reply_to_message: payload.reply_to_message,
         reactions: payload.reactions,
+        sent_by_user_id: payload.sent_by_user_id,
+        sent_by_user_name: payload.sent_by_user_name,
         created_at: payload.created_at,
         updated_at: payload.updated_at
       })
