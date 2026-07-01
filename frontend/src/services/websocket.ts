@@ -191,9 +191,9 @@ class WebSocketService {
           if (!(this as any)._typingTimers) (this as any)._typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
           const prev = (this as any)._typingTimers.get(p.contact_id)
           if (prev) clearTimeout(prev)
-          store.agentTyping.set(p.contact_id, { name: p.user_name })
+          store.agentTyping[p.contact_id] = { name: p.user_name }
           const timer = setTimeout(() => {
-            store.agentTyping.delete(p.contact_id)
+            delete store.agentTyping[p.contact_id]
           }, 4000)
           ;(this as any)._typingTimers.set(p.contact_id, timer)
           break
