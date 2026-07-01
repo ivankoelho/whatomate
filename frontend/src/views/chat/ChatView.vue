@@ -2535,7 +2535,43 @@ async function sendMediaMessage() {
 
         <!-- Message Input -->
         <div class="p-4 border-t border-white/[0.08] light:border-gray-200 bg-[#0f0f10] light:bg-white">
-          <!-- Indicador: outro agente está digitando nesta conversa -->
+               <!-- Inline slash picker dropdown -->
+          <Transition name="slide-up">
+            <div
+              v-if="cannedPickerOpen && filteredCannedForSlash.length > 0"
+              class="mx-2 mb-1 rounded-lg border border-white/[0.12] light:border-gray-200 bg-[#1c1c2e] light:bg-white shadow-2xl overflow-hidden"
+            >
+              <div class="px-3 py-1.5 border-b border-white/[0.06] light:border-gray-100 flex items-center gap-2">
+                <span class="text-[10px] text-white/30 light:text-gray-400 uppercase tracking-wider font-medium">Respostas rápidas</span>
+                <span class="text-[10px] text-white/20 light:text-gray-300">↑↓ navegar · Enter inserir · Esc fechar</span>
+              </div>
+              <div class="max-h-52 overflow-y-auto overscroll-contain">
+                <button
+                  v-for="(response, idx) in filteredCannedForSlash"
+                  :key="response.id"
+                  type="button"
+                  :class="[
+                    'w-full text-left px-3 py-2 transition-colors border-b border-white/[0.04] light:border-gray-50 last:border-0',
+                    idx === slashPickerIndex ? 'bg-emerald-600/25 light:bg-emerald-50' : 'hover:bg-white/[0.04] light:hover:bg-gray-50'
+                  ]"
+                  @mousedown.prevent="insertCannedFromSlash(response)"
+                  @mouseover="slashPickerIndex = idx"
+                >
+                  <div class="flex items-start gap-2.5">
+                    <code class="mt-0.5 shrink-0 text-[10px] bg-white/[0.08] light:bg-gray-100 text-white/40 light:text-gray-500 px-1.5 py-0.5 rounded font-mono">
+                      /{{ response.shortcut || response.name }}
+                    </code>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-xs font-medium text-white/75 light:text-gray-800 truncate">{{ response.name }}</p>
+                      <p class="text-[11px] text-white/35 light:text-gray-500 line-clamp-1">{{ response.content?.slice(0, 90) }}{{ (response.content?.length ?? 0) > 90 ? '…' : '' }}</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </Transition>
+
+     <!-- Indicador: outro agente está digitando nesta conversa -->
           <div
             v-if="contactsStore.agentTyping.get(contactsStore.currentContact?.id || '')"
             class="px-3 pb-1 text-[11px] text-white/40 light:text-gray-400 italic flex items-center gap-1.5"
