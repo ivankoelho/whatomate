@@ -201,6 +201,9 @@ export const contactsService = {
     api.put(`/contacts/${id}/tags`, { tags }),
   getSessionData: (id: string) => api.get(`/contacts/${id}/session-data`),
   markRead: (id: string) => api.post(`/contacts/${encodeURIComponent(id)}/mark-read`),
+  /** Retorna o AgentTransfer ativo do contato, ou null se não houver. */
+  getActiveTransfer: (id: string) =>
+    api.get<{ data: { transfer: { id: string; contact_id: string; status: string; source: string; agent_id?: string; team_id?: string; notes: string; transferred_at: string } | null } }>(`/contacts/${encodeURIComponent(id)}/transfer`),
   /** Emite evento agent_typing via WS para os demais agentes. Deve ser chamado com debounce. */
   typing: (contactId: string) => api.post(`/contacts/${encodeURIComponent(contactId)}/typing`),
   updateStatus: (id: string, status: 'new' | 'in_progress' | 'resolved') =>
