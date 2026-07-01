@@ -1767,6 +1767,21 @@ func (a *App) UpdateContactStatus(r *fastglue.Request) error {
 		return r.SendErrorEnvelope(fasthttp.StatusInternalServerError, "Failed to update status", nil, "")
 	}
 
+	// When resolving, expire any active AgentTransfer so the chatbot can
+	// process keywords and flows again on the next incoming message.
+	// Without this, hasActiveAgentTransfer returns true and the chatbot
+	// is permanently blocked even after the agent marks the chat as resolved.
+	if models.ContactStatus(body.Status) == models.ContactStatusResolved {
+		if err := a.DB.Model(&models.AgentTransfer{}).
+			Where("organization_id = ? AND contact_id = ? AND status = ?",
+				orgID, contactID, models.TransferStatusActive).
+			Update("status", models.TransferStatusExpired).Error; err != nil {
+			a.Log.Warn("Failed to expire active transfer on resolve", "contact_id", contactID, "error", err)
+		}
+		// Also clear chatbot tracking so the next session starts fresh
+		a.ClearContactChatbotTracking(contactID)
+	}
+
 	a.logAudit(orgID, userID, "contact", contactID, models.AuditActionUpdated, nil, map[string]any{
 		"status": body.Status,
 	})
