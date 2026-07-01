@@ -98,7 +98,9 @@ export const useContactsStore = defineStore('contacts', () => {
    * Chave: contact_id. Valor: { name: string } do agente que está digitando.
    * Limpo automaticamente após 4 s sem novo evento (ver websocket.ts).
    */
-  const agentTyping = ref<Map<string, { name: string }>>(new Map())
+  // Use a plain reactive Record instead of Map so Vue 3's reactivity
+  // system tracks .set()/.delete() without manual triggerRef() calls.
+  const agentTyping = ref<Record<string, { name: string }>>({}) 
   const isLoading = ref(false)
   const isLoadingMessages = ref(false)
   const isLoadingOlderMessages = ref(false)
