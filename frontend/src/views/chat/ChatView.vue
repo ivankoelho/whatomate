@@ -184,6 +184,9 @@ const isUploadingMedia = ref(false)
 const cannedPickerOpen = ref(false)
 const cannedSearchQuery = ref('')
 
+// Typing throttle timer (null = can fire next call)
+const typingThrottleTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+
 // Canned response preview dialog state
 const cannedDialogOpen = ref(false)
 const selectedCannedResponse = ref<CannedResponse | null>(null)
@@ -1220,6 +1223,16 @@ watch(messageInput, (val) => {
     cannedPickerOpen.value = false
     cannedSearchQuery.value = ''
   }
+  // Typing indicator — throttled to 1 call per 2 s while typing
+  if (val.trim() && contactsStore.currentContact) {
+    const contactId = contactsStore.currentContact.id
+    if (!typingThrottleTimer.value) {
+      messagesService.typing(contactId).catch(() => {})
+      typingThrottleTimer.value = window.setTimeout(() => {
+        typingThrottleTimer.value = null
+      }, 2000)
+    }
+  }
 })
 
 async function assignContactToUser(userId: string | null) {
@@ -2125,10 +2138,17 @@ async function sendMediaMessage() {
               <div
                 :id="`message-${message.id}`"
                 :class="[
-                  'flex group',
-                  message.direction === 'outgoing' ? 'justify-end' : 'justify-start'
+                  'flex flex-col group',
+                  message.direction === 'outgoing' ? 'items-end' : 'items-start'
                 ]"
               >
+                <!-- Nome do agente acima de mensagens outgoing -->
+                <span
+                  v-if="message.direction === 'outgoing' && message.sent_by_user_name"
+                  class="text-[10px] text-white/35 light:text-gray-400 font-medium mb-0.5 mr-1 select-none"
+                >
+                  {{ message.sent_by_user_name }}
+                </span>
               <div
                 :class="[
                   'chat-bubble',
@@ -2493,6 +2513,18 @@ async function sendMediaMessage() {
 
         <!-- Message Input -->
         <div class="p-4 border-t border-white/[0.08] light:border-gray-200 bg-[#0f0f10] light:bg-white">
+          <!-- Indicador: outro agente está digitando nesta conversa -->
+          <div
+            v-if="contactsStore.agentTyping.get(contactsStore.currentContact?.id || '')"
+            class="px-3 pb-1 text-[11px] text-white/40 light:text-gray-400 italic flex items-center gap-1.5"
+          >
+            <span class="inline-flex gap-0.5">
+              <span class="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:0ms]"></span>
+              <span class="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:150ms]"></span>
+              <span class="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:300ms]"></span>
+            </span>
+            {{ contactsStore.agentTyping.get(contactsStore.currentContact?.id || '')?.name }} está digitando...
+          </div>
           <form @submit.prevent="sendMessage" class="flex items-center gap-2 p-2 rounded-xl bg-white/[0.06] light:bg-gray-100 border border-white/[0.08] light:border-gray-200">
             <Tooltip>
               <TooltipTrigger as-child>
