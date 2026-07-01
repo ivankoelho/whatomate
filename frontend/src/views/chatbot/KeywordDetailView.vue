@@ -70,8 +70,9 @@ interface ButtonItem {
 const form = ref({
   keywords: '',
   match_type: 'contains' as 'contains' | 'exact' | 'regex',
-  response_type: 'text' as 'text' | 'transfer',
+  response_type: 'text' as 'text' | 'transfer' | 'flow',
   response_content: '',
+  flow_id: '' as string,
   buttons: [] as ButtonItem[],
   priority: 0,
   enabled: true,
@@ -105,6 +106,7 @@ function syncForm() {
     keywords: (keyword.value.keywords || []).join(', '),
     match_type: keyword.value.match_type || 'contains',
     response_type: keyword.value.response_type || 'text',
+    flow_id: keyword.value.response_content?.flow_id || '',
     response_content: keyword.value.response_content?.body || '',
     buttons: [...(keyword.value.response_content?.buttons || [])],
     priority: keyword.value.priority || 0,
@@ -131,14 +133,18 @@ function removeButton(index: number) {
 
 function buildPayload() {
   const validButtons = form.value.buttons.filter(b => b.title.trim())
+  const responseContent: Record<string, any> = {
+    body: form.value.response_content,
+    buttons: validButtons.length > 0 ? validButtons : undefined,
+  }
+  if (form.value.response_type === 'flow' && form.value.flow_id) {
+    responseContent.flow_id = form.value.flow_id
+  }
   return {
     keywords: form.value.keywords.split(',').map(k => k.trim()).filter(Boolean),
     match_type: form.value.match_type,
     response_type: form.value.response_type,
-    response_content: {
-      body: form.value.response_content,
-      buttons: validButtons.length > 0 ? validButtons : undefined,
-    },
+    response_content: responseContent,
     priority: form.value.priority,
     enabled: form.value.enabled,
   }
@@ -150,7 +156,11 @@ async function save() {
     return
   }
 
-  if (form.value.response_type !== 'transfer' && !form.value.response_content.trim()) {
+  if (form.value.response_type === 'flow' && !form.value.flow_id) {
+    toast.error('Selecione um fluxo para ser acionado por esta palavra-chave')
+    return
+  }
+  if (form.value.response_type !== 'transfer' && form.value.response_type !== 'flow' && !form.value.response_content.trim()) {
     toast.error(t('keywords.enterResponse', 'Please enter a response message'))
     return
   }
@@ -201,6 +211,17 @@ onMounted(async () => {
     await loadKeyword()
   }
 })
+
+// Load available flows for the flow-type keyword selector
+const availableFlows = ref<{ id: string; name: string }[]>([])
+onMounted(async () => {
+  try {
+    const res = await chatbotService.listFlows({ limit: 100 })
+    const data = (res.data as any).data || res.data
+    availableFlows.value = (data.flows || []).map((f: any) => ({ id: f.id, name: f.name }))
+  } catch { /* silent */ }
+})
+
 </script>
 
 <template>
@@ -264,12 +285,13 @@ onMounted(async () => {
             <SelectContent>
               <SelectItem value="text">{{ $t('keywords.textResponse', 'Text Response') }}</SelectItem>
               <SelectItem value="transfer">{{ $t('keywords.transferToAgent', 'Transfer to Agent') }}</SelectItem>
+              <SelectItem value="flow">Acionar Fluxo</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div class="space-y-1.5">
           <Label class="text-xs">
-            {{ form.response_type === 'transfer' ? $t('keywords.transferMessage', 'Transfer Message') : $t('keywords.responseMessage', 'Response Message') }}
+            {{ form.response_type === 'transfer' ? $t('keywords.transferMessage', 'Transfer Message') : form.response_type === 'flow' ? 'Mensagem antes do fluxo (opcional)' : $t('keywords.responseMessage', 'Response Message') }}
             <span v-if="form.response_type !== 'transfer'">*</span>
           </Label>
           <Textarea
@@ -278,6 +300,22 @@ onMounted(async () => {
             :rows="3"
             :disabled="!canWrite"
           />
+          <!-- Flow selector — shown when response_type = flow -->
+          <div v-if="form.response_type === 'flow'" class="space-y-1.5">
+            <Label class="text-xs font-medium">Fluxo a acionar <span class="text-destructive">*</span></Label>
+            <select
+              v-model="form.flow_id"
+              class="w-full h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+              :disabled="!canWrite"
+            >
+              <option value="">Selecione um fluxo...</option>
+              <option v-for="flow in availableFlows" :key="flow.id" :value="flow.id">
+                {{ flow.name }}
+              </option>
+            </select>
+            <p class="text-xs text-muted-foreground">O fluxo será iniciado quando o cliente enviar esta palavra-chave.</p>
+          </div>
+
           <p v-if="form.response_type === 'transfer'" class="text-xs text-muted-foreground">
             {{ $t('keywords.transferHint', 'Optional message sent before transferring to a human agent') }}
           </p>
