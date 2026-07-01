@@ -425,13 +425,9 @@ func (a *App) CreateAgentTransfer(r *fastglue.Request) error {
 	// creating the new one. This allows agents to re-transfer a conversation
 	// (e.g. chatbot → team → another agent) without hitting a 409 conflict.
 	// The previous transfer is marked as 'expired' so historical records are kept.
-	now := time.Now()
 	if err := a.DB.Model(&models.AgentTransfer{}).
 		Where("organization_id = ? AND contact_id = ? AND status = ?", orgID, contactID, models.TransferStatusActive).
-		Updates(map[string]any{
-			"status":     models.TransferStatusExpired,
-			"expired_at": now,
-		}).Error; err != nil {
+		Update("status", models.TransferStatusExpired).Error; err != nil {
 		a.Log.Error("Failed to expire previous transfer before re-transfer", "contact_id", contactID, "error", err)
 		// Non-fatal: proceed anyway — worst case we get a duplicate which is better than blocking the agent
 	}
