@@ -236,6 +236,13 @@ func (a *App) processIncomingMessageFull(phoneNumberID string, msg IncomingTextM
 	}
 	a.Log.Info("Chatbot settings loaded", "settings_id", settings.ID, "is_enabled", settings.IsEnabled, "ai_enabled", settings.AI.Enabled, "ai_provider", settings.AI.Provider, "default_response", settings.DefaultResponse)
 
+	// Auto-resolve any stale "chatbot_disabled" agent transfers for this contact.
+	// When the chatbot was previously disabled a transfer was created (source=chatbot_disabled).
+	// If the chatbot is now re-enabled, that transfer still exists with status=active and
+	// hasActiveAgentTransfer() would return true for every message, permanently blocking all
+	// chatbot processing. We resolve it here so the chatbot can take over again.
+	a.resolveStaleDisabledTransfers(account.OrganizationID, contact.ID)
+
 	// Check business hours if enabled
 	if settings.BusinessHours.Enabled && len(settings.BusinessHours.Hours) > 0 {
 		if !a.isWithinBusinessHours(settings.BusinessHours.Hours) {
