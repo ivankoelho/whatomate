@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -359,6 +360,48 @@ func (a *App) processIncomingMessage(phoneNumberID string, msg IncomingTextMessa
 			a.Log.Debug("Duplicate message detected, skipping", "message_id", msg.ID)
 			return
 		}
+	}
+
+	// Serialize chatbot processing per contact. Meta delivers each inbound
+	// message in its own goroutine (see the "go a.processIncomingMessage"
+	// call above); without a lock, a button click and a message sent right
+	// after it can be picked up by two goroutines at the same time, both
+	// reading the same (stale) session.CurrentStep before either finishes
+	// persisting it. Whichever goroutine saves last wins, which looks like
+	// "clicking a menu button does nothing until you type something" — the
+	// click's state update gets silently overwritten.
+	//
+	// The lock key is scoped to (phoneNumberID, msg.From) rather than a DB
+	// contact ID, since it must be computable before any DB lookup happens
+	// inside processIncomingMessageFull.
+	lockKey := fmt.Sprintf("chatbot:contact_lock:%s:%s", phoneNumberID, msg.From)
+	lockCtx := context.Background()
+	const lockTTL = 30 * time.Second
+	const lockMaxWait = 10 * time.Second
+	const lockRetryInterval = 150 * time.Millisecond
+
+	lockAcquired := false
+	if msg.From != "" {
+		deadline := time.Now().Add(lockMaxWait)
+		for {
+			ok, err := a.Redis.SetNX(lockCtx, lockKey, "1", lockTTL).Result()
+			if err != nil {
+				a.Log.Error("Failed to acquire chatbot contact lock, proceeding without it", "error", err, "key", lockKey)
+				break
+			}
+			if ok {
+				lockAcquired = true
+				break
+			}
+			if time.Now().After(deadline) {
+				a.Log.Warn("Timed out waiting for chatbot contact lock, proceeding anyway", "key", lockKey)
+				break
+			}
+			time.Sleep(lockRetryInterval)
+		}
+	}
+	if lockAcquired {
+		defer a.Redis.Del(lockCtx, lockKey)
 	}
 
 	// Process the message with chatbot logic
